@@ -130,6 +130,15 @@
   .project-links a{font-size:13px;color:var(--text-dim);border-bottom:1px solid var(--line);}
   .project-links a:hover{color:var(--accent);border-color:var(--accent);}
 
+
+  .feat{list-style:none;margin-top:16px;display:grid;grid-template-columns:1fr 1fr;gap:10px 24px;max-width:720px;}
+  .feat li{font-size:13.5px;color:var(--text-dim);padding-left:16px;position:relative;}
+  .feat li::before{content:"›";position:absolute;left:0;color:var(--accent);}
+  .feat li b{color:var(--text);font-weight:500;}
+  .controls{margin-top:16px;font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--text-dim);max-width:720px;line-height:1.8;}
+  .controls span{color:var(--teal);}
+  .version{font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--accent);margin-left:8px;}
+
   .contact-row{
     display:flex;justify-content:space-between;align-items:center;
     flex-wrap:wrap;gap:24px;
@@ -152,6 +161,7 @@
     h1.name{font-size:38px;}
     .about-values{grid-template-columns:1fr;}
     .skills-grid{grid-template-columns:1fr;}
+    .feat{grid-template-columns:1fr;}
     .nav-links{display:none;}
   }
 
@@ -172,7 +182,7 @@
     <div class="nav-logo">Jefrin<span>.</span>L</div>
     <div class="nav-links">
       <a href="#about">About</a>
-      <a href="#surprise">Surprise Maker</a>
+      <a href="#surprise">Create Surprise</a>
       <a href="#skills">Skills</a>
       <a href="#projects">Projects</a>
       <a href="#contact">Contact</a>
@@ -214,13 +224,13 @@
 
 <section id="surprise">
   <div class="wrap">
-    <h2 class="section-title"><span class="num mono">02</span> Surprise Maker</h2>
+    <h2 class="section-title"><span class="num mono">02</span> Create Surprise</h2>
     <div class="about-text">
       <p>A personalized birthday-surprise page generator I built with HTML, CSS and JavaScript. You type in someone's name, a few love notes, and a handful of reasons you appreciate them — it turns that into an interactive countdown, a butterfly-catching mini game, and an animated final reveal.</p>
       <p>Every surprise is different because the words come from whoever's making it. Download it as a ready-to-send file, or generate a link and share it straight to WhatsApp.</p>
     </div>
     <div class="hero-links" style="margin-top:24px;">
-      <a href="Birthday-Personalized.html" class="btn primary" target="_blank" rel="noopener">Create a surprise ✨</a>
+      <a href="birthday.html" class="btn primary" target="_blank" rel="noopener">Create a surprise ✨</a>
     </div>
   </div>
 </section>
@@ -244,24 +254,45 @@
 
     <div class="project">
       <div class="project-head">
-        <h3>Bounce Ball Deluxe</h3>
-        <div class="project-tags"><span class="tag">Python</span><span class="tag">Pygame</span></div>
+        <h3>BOUNCE_BALL_DELUXE_v1.0.0</h3>
+        <div class="project-tags"><span class="tag">Python</span><span class="tag">Pygame</span><span class="tag">Tkinter</span></div>
       </div>
-      <p class="desc">A brick-breaker style arcade game built with Python and Pygame, featuring multiple levels, a boss fight on Level 3, and persistent save progress between sessions.</p>
+      <p class="desc">A feature-packed brick-breaker for desktop, built with a Tkinter + Pygame hybrid. Smash through 3 levels, survive a boss fight on Level 3, collect power-ups, chain combos and spend your coins in the shop. Progress, coins and achievements are saved automatically between sessions.</p>
+      <ul class="feat">
+        <li><b>3 levels + boss:</b> Level 3 is a boss arena with an HP bar and bomb attacks.</li>
+        <li><b>7 power-ups:</b> Wide, Multi-ball, Slow, Fire ball, Extra life, Laser paddle and Magnet.</li>
+        <li><b>Special bricks:</b> golden, bomb and ice bricks, plus moving bricks.</li>
+        <li><b>Combo system:</b> combos up to x30 and a Combo Fever score multiplier.</li>
+        <li><b>4 difficulties:</b> Easy, Normal, Hard and Insane change ball, brick and boss behaviour.</li>
+        <li><b>Shop:</b> unlock 5 ball skins and 3 paddle skins with coins you earn.</li>
+        <li><b>Missions and achievements:</b> a mission each level and 9 achievements to unlock.</li>
+        <li><b>Challenge mode:</b> a timed, one-life run for score chasers.</li>
+        <li><b>Polish:</b> particles, screen shake, 4 colour themes, sound with volume/mute and auto graphics quality.</li>
+        <li><b>Safe saves:</b> JSON save file with high score; runs silently if no audio device is found.</li>
+      </ul>
+      <p class="controls"><span>← → / A D</span> move &nbsp; <span>Enter</span> start &nbsp; <span>Space</span> pause &nbsp; <span>F</span> laser &nbsp; <span>G</span> shop &nbsp; <span>O</span> settings &nbsp; <span>I</span> difficulty &nbsp; <span>C</span> challenge &nbsp; <span>Esc</span> restart</p>
       <div class="project-links">
-        <a href="#">Download</a>
+        <a href="#">Download v1.0.0</a>
       </div>
     </div>
 
     <div class="project">
       <div class="project-head">
-        <h3>Animated Birthday Webpage</h3>
-        <div class="project-tags"><span class="tag">HTML</span><span class="tag">CSS</span></div>
+        <h3>Create Surprise</h3>
+        <div class="project-tags"><span class="tag">HTML</span><span class="tag">CSS</span><span class="tag">JavaScript</span></div>
       </div>
-      <p class="desc">A personalized, single-page birthday celebration site with animated gradient backgrounds, custom typography, and smooth CSS-driven visual effects — now with a built-in form so anyone can generate their own version, downloadable or shareable via WhatsApp.</p>
+      <p class="desc">A personalized birthday-surprise generator. Anyone can fill in a short form and instantly get their own interactive surprise page to send to someone they care about.</p>
+      <ul class="feat">
+        <li><b>Your words:</b> enter the person's name, a few love notes and reasons you appreciate them.</li>
+        <li><b>Countdown:</b> an interactive countdown builds up to the surprise.</li>
+        <li><b>Mini game:</b> a butterfly-catching game before the reveal.</li>
+        <li><b>Final reveal:</b> an animated ending showing your message.</li>
+        <li><b>Download:</b> save the surprise as a ready-to-send HTML file.</li>
+        <li><b>Share:</b> generate a link and send it straight to WhatsApp.</li>
+      </ul>
       <div class="project-links">
         <a href="#">Source code</a>
-        <a href="Birthday-Personalized.html" target="_blank" rel="noopener">Live demo</a>
+        <a href="birthday.html" target="_blank" rel="noopener">Create a surprise</a>
       </div>
     </div>
   </div>

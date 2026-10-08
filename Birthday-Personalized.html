@@ -380,7 +380,7 @@
     gap: 10px;
     margin-top: 4px;
   }
-  .reason-media.has-photo { grid-template-columns: 1fr 1fr; }
+  .reason-media.has-photo { grid-template-columns: 1fr; }
   .reason-fig {
     position: relative;
     margin: 0;
@@ -394,6 +394,11 @@
   .reason-media:not(.has-photo) .reason-fig { max-width: 290px; margin: 0 auto; width: 100%; }
   .reason-fig svg, .reason-fig img { width: 100%; height: 100%; display: block; }
   .reason-fig img { object-fit: cover; }
+  /* the user's own photo: show the WHOLE picture, never crop it */
+  .reason-media.has-photo { align-items: start; }
+  .reason-media.has-photo .reason-fig { max-width: 340px; margin: 0 auto; width: 100%; }
+  .reason-fig.photo-fig { aspect-ratio: auto; background: rgba(0, 0, 0, 0.22); }
+  .reason-fig.photo-fig img { width: 100%; height: auto; max-height: 80vh; object-fit: contain; }
   .reason-fig figcaption {
     position: absolute; left: 8px; bottom: 8px;
     font-size: 0.62rem; letter-spacing: 1px; text-transform: uppercase;
@@ -678,7 +683,7 @@
         <input type="file" id="song-file" accept="audio/*" hidden>
         <div class="song-empty" id="song-empty">
           <button type="button" class="song-add" onclick="document.getElementById('song-file').click()">＋ Add favorite song</button>
-          <div class="field-hint">We'll automatically pick the best 30 seconds. It plays while the photos &amp; notes are shown.</div>
+          <div class="field-hint">The full song plays automatically from the start of the countdown till the very end.</div>
         </div>
         <div class="song-status" id="song-status" hidden>
           <div class="song-icon" id="song-icon">🎵</div>
@@ -1131,100 +1136,12 @@ function shareViaWhatsApp() {
   window.open('https://wa.me/?text=' + encodeURIComponent(message), '_blank');
 }
 
-// ---------- FAVORITE SONG (auto 30-second clip) ----------
-const SONG_CLIP_SECONDS = 30;
-let songCtx = null;
-let SONG_CLIP = null;          // { buffer, name, start }
-let songSource = null;
-let songGain = null;
+// ---------- FAVORITE SONG (full song: starts with the countdown, plays to the very end) ----------
+let SONG_CLIP = null;          // { url, name, duration }
+let songAudio = null;
 let songLoadToken = 0;
 
-function getSongCtx() {
-  if (!songCtx) {
-    const AC = window.AudioContext || window.webkitAudioContext;
-    if (!AC) return null;
-    songCtx = new AC();
-  }
-  return songCtx;
-}
-
-function decodeAudio(ctx, arrayBuffer) {
-  return new Promise((resolve, reject) => {
-    const p = ctx.decodeAudioData(arrayBuffer, resolve, reject);
-    if (p && p.catch) p.catch(reject);
-  });
-}
-
 const fmtTime = t => `${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, '0')}`;
-
-// Looks for the loudest, most sustained stretch (usually the chorus), preferring one that
-// starts where the energy jumps up, and avoiding the intro and the fade-out.
-function findBestClipStart(buf, clipLen) {
-  const dur = buf.duration;
-  if (dur <= clipLen + 1) return 0;
-
-  const hop = 0.25;
-  const hopN = Math.max(1, Math.floor(buf.sampleRate * hop));
-  const n = Math.floor(buf.length / hopN);
-  const W = Math.round(clipLen / hop);
-  if (n <= W) return 0;
-
-  const chans = [];
-  for (let c = 0; c < buf.numberOfChannels; c++) chans.push(buf.getChannelData(c));
-
-  // Loudness envelope (perceptually compressed RMS per 0.25s)
-  const env = new Float32Array(n);
-  for (let i = 0; i < n; i++) {
-    let sum = 0, cnt = 0;
-    const a = i * hopN, b = a + hopN;
-    for (let c = 0; c < chans.length; c++) {
-      const d = chans[c];
-      for (let j = a; j < b; j += 4) { sum += d[j] * d[j]; cnt++; }
-    }
-    env[i] = Math.sqrt(Math.sqrt(sum / Math.max(1, cnt)));
-  }
-
-  const P = new Float64Array(n + 1);
-  for (let i = 0; i < n; i++) P[i + 1] = P[i] + env[i];
-  const mean = (a, b) => (P[b] - P[a]) / Math.max(1, b - a);
-  const g = mean(0, n) || 1e-6;
-
-  const L = 12; // 3s look-behind / look-ahead for the "energy jump" check
-  let best = 0, bestScore = -Infinity;
-  for (let s = 0; s <= n - W; s++) {
-    const startT = s * hop;
-    const endT = startT + clipLen;
-    const centerFrac = (startT + clipLen / 2) / dur;
-
-    let score = mean(s, s + W) / g;
-    score *= 1 - 0.25 * Math.min(1, Math.abs(centerFrac - 0.45) / 0.45);
-    if (startT < dur * 0.08) score *= 0.85;
-    if (endT > dur * 0.92) score *= 0.85;
-    if (s >= L) score += 0.5 * Math.max(0, mean(s, s + L) - mean(s - L, s)) / g;
-
-    if (score > bestScore) { bestScore = score; best = s; }
-  }
-
-  // Snap the cut to the quietest nearby moment so it starts cleanly
-  let snapped = best, minV = Infinity;
-  for (let k = -3; k <= 3; k++) {
-    const i = best + k;
-    if (i < 0 || i > n - W) continue;
-    if (env[i] < minV) { minV = env[i]; snapped = i; }
-  }
-  return snapped * hop;
-}
-
-function cutClip(buf, startSec, len) {
-  const sr = buf.sampleRate;
-  const a = Math.floor(startSec * sr);
-  const count = Math.min(Math.floor(len * sr), buf.length - a);
-  const out = getSongCtx().createBuffer(buf.numberOfChannels, count, sr);
-  for (let c = 0; c < buf.numberOfChannels; c++) {
-    out.copyToChannel(buf.getChannelData(c).slice(a, a + count), c);
-  }
-  return out;
-}
 
 function setSongUI(state, name, detail) {
   const box = document.getElementById('song-box');
@@ -1247,96 +1164,82 @@ function setSongUI(state, name, detail) {
   }
 }
 
-async function handleSongFile(file) {
+function songPlaying() { return !!(songAudio && !songAudio.paused && !songAudio.ended); }
+
+function clearSong() {
+  if (songAudio) { try { songAudio.pause(); } catch (e) {} }
+  if (SONG_CLIP) { try { URL.revokeObjectURL(SONG_CLIP.url); } catch (e) {} }
+  SONG_CLIP = null;
+  songAudio = null;
+}
+
+function handleSongFile(file) {
   if (!file) return;
   const token = ++songLoadToken;
   const name = file.name.replace(/\.[^.]+$/, '');
-  stopSong(true);
-  SONG_CLIP = null;
-  setSongUI('loading', name, 'Finding the best 30 seconds…');
-  try {
-    const ctx = getSongCtx();
-    if (!ctx) throw new Error('no audio support');
-    if (ctx.state === 'suspended') ctx.resume();
-    const decoded = await decodeAudio(ctx, await file.arrayBuffer());
+  clearSong();
+  setSongUI('loading', name, 'Loading your song…');
+  const url = URL.createObjectURL(file);
+  const a = new Audio();
+  a.preload = 'auto';
+  a.onloadedmetadata = () => {
+    if (token !== songLoadToken) { URL.revokeObjectURL(url); return; }
+    songAudio = a;
+    SONG_CLIP = { url, name, duration: a.duration };
+    const len = isFinite(a.duration) ? ` · ${fmtTime(a.duration)}` : '';
+    setSongUI('ready', name, `Full song${len} · plays from the countdown to the end`);
+  };
+  a.onerror = () => {
     if (token !== songLoadToken) return;
-    // let the "finding" message paint before the analysis loop runs
-    await new Promise(r => setTimeout(r, 30));
-    const start = findBestClipStart(decoded, SONG_CLIP_SECONDS);
-    const len = Math.min(SONG_CLIP_SECONDS, decoded.duration - start);
-    SONG_CLIP = { buffer: cutClip(decoded, start, len), name, start };
-    setSongUI('ready', name, `Best 30s picked · from ${fmtTime(start)}`);
-  } catch (e) {
-    if (token !== songLoadToken) return;
-    SONG_CLIP = null;
+    try { URL.revokeObjectURL(url); } catch (e) {}
+    SONG_CLIP = null; songAudio = null;
     setSongUI('error', name, "Couldn't read that file. Try an MP3, M4A or WAV.");
-  }
+  };
+  a.addEventListener('play', updateSongPreviewBtn);
+  a.addEventListener('pause', updateSongPreviewBtn);
+  a.addEventListener('ended', updateSongPreviewBtn);
+  a.src = url;
 }
 
 function removeSong() {
   songLoadToken++;
-  stopSong(true);
-  SONG_CLIP = null;
+  clearSong();
   const input = document.getElementById('song-file');
   if (input) input.value = '';
   setSongUI('empty');
-}
-
-function startSong() {
-  if (!SONG_CLIP) return;
-  const ctx = getSongCtx();
-  if (!ctx) return;
-  stopSong(true);
-  if (ctx.state === 'suspended') ctx.resume();
-
-  const src = ctx.createBufferSource();
-  src.buffer = SONG_CLIP.buffer;
-  const gain = ctx.createGain();
-  const t = ctx.currentTime + 0.05;
-  const d = SONG_CLIP.buffer.duration;
-  const fadeIn = Math.min(1.2, d / 4), fadeOut = Math.min(2, d / 4);
-  gain.gain.setValueAtTime(0, t);
-  gain.gain.linearRampToValueAtTime(1, t + fadeIn);
-  gain.gain.setValueAtTime(1, t + d - fadeOut);
-  gain.gain.linearRampToValueAtTime(0, t + d);
-  src.connect(gain);
-  gain.connect(ctx.destination);
-  src.onended = () => {
-    if (songSource === src) { songSource = null; songGain = null; }
-    updateSongPreviewBtn();
-  };
-  src.start(t);
-  songSource = src;
-  songGain = gain;
   updateSongPreviewBtn();
 }
 
-function stopSong(immediate) {
-  if (!songSource) return;
-  const src = songSource, gain = songGain;
-  songSource = null; songGain = null;
-  try {
-    if (immediate) {
-      src.onended = null;
-      src.stop();
-    } else {
-      const t = songCtx.currentTime;
-      gain.gain.cancelScheduledValues(t);
-      gain.gain.setValueAtTime(gain.gain.value, t);
-      gain.gain.linearRampToValueAtTime(0, t + 0.6);
-      src.stop(t + 0.65);
-    }
-  } catch (e) { /* already stopped */ }
+// Always starts the song from the very beginning (called when the countdown starts).
+function startSong() {
+  if (!songAudio) return;
+  try { songAudio.currentTime = 0; } catch (e) {}
+  songAudio.volume = 1;
+  const p = songAudio.play();
+  if (p && p.catch) p.catch(() => { /* autoplay blocked by the browser */ });
+  updateSongPreviewBtn();
+}
+
+// Continues from where it was (used after the video's own sound steps aside).
+function resumeSong() {
+  if (!songAudio || songAudio.ended || songPlaying()) return;
+  const p = songAudio.play();
+  if (p && p.catch) p.catch(() => {});
+}
+
+function stopSong() {
+  if (!songAudio) return;
+  songAudio.pause();
   updateSongPreviewBtn();
 }
 
 function toggleSongPreview() {
-  if (songSource) stopSong(true); else startSong();
+  if (songPlaying()) stopSong(); else startSong();
 }
 
 function updateSongPreviewBtn() {
   const btn = document.getElementById('song-preview-btn');
-  if (btn) btn.textContent = songSource ? '■ Stop' : '▶ Preview';
+  if (btn) btn.textContent = songPlaying() ? '■ Stop' : '▶ Preview';
 }
 
 (function initSongPicker() {
@@ -1429,14 +1332,14 @@ function handleVideoFile(file) {
   // Only one audio source at a time: if the video's own sound is switched on, the song steps aside.
   v.addEventListener('volumechange', () => {
     if (!document.getElementById('screen4c').classList.contains('active')) return;
-    if (!v.muted && v.volume > 0) stopSong(false);
-    else if (v.muted && SONG_CLIP && !songSource) startSong();
+    if (!v.muted && v.volume > 0) stopSong();
+    else if (v.muted && SONG_CLIP) resumeSong();
     updateVideoSoundBtn();
   });
   v.addEventListener('play', () => {
-    if (v.muted && SONG_CLIP && !songSource) startSong();
+    if (v.muted && SONG_CLIP) resumeSong();
   });
-  v.addEventListener('pause', () => { /* song keeps its own 30s timeline */ });
+  v.addEventListener('pause', () => { /* the song keeps playing on its own */ });
 })();
 
 function updateVideoSoundBtn() {
@@ -1463,9 +1366,9 @@ function pauseVideo() {
 function goToVideo() {
   const v = document.getElementById('memory-video');
   if (v.getAttribute('src') !== VIDEO_CLIP.url) v.src = VIDEO_CLIP.url;
-  showScreen('screen4c');                 // also keeps / restarts the song
+  showScreen('screen4c');                 // the song just keeps playing
   v.currentTime = 0;
-  v.muted = !!SONG_CLIP;                  // song + video together: the song is the sound, video plays silently
+  v.muted = !!(SONG_CLIP && songAudio && !songAudio.ended);                  // song + video together: the song is the sound, video plays silently
   updateVideoSoundBtn();
   const p = v.play();
   if (p && p.catch) p.catch(() => { /* autoplay blocked: the player controls are right there */ });
@@ -1476,10 +1379,8 @@ function showScreen(id) {
   document.getElementById(id).classList.add('active');
   window.scrollTo(0, 0);
   updateScrollHint();
-  // The song plays on the photos + notes screen, and keeps going (or restarts) on the video screen
-  if (id === 'screen4b') startSong();
-  else if (id === 'screen4c') { if (!songSource) startSong(); }
-  else stopSong(false);
+  // The song starts from the beginning with the countdown and keeps playing through every screen to the end
+  if (id === 'screen1') startSong();
   if (id !== 'screen4c') pauseVideo();
 }
 
@@ -1864,14 +1765,17 @@ function renderReasonMedia(i) {
   media.innerHTML = '';
   media.classList.toggle('has-photo', !!photo);
 
-  const art = document.createElement('figure');
-  art.className = 'reason-fig';
-  art.innerHTML = illustrationFor(r);
-  media.appendChild(art);
+  // Default illustration only when no photo was uploaded; otherwise show just the user's photo
+  if (!photo) {
+    const art = document.createElement('figure');
+    art.className = 'reason-fig';
+    art.innerHTML = illustrationFor(r);
+    media.appendChild(art);
+  }
 
   if (photo) {
     const fig = document.createElement('figure');
-    fig.className = 'reason-fig';
+    fig.className = 'reason-fig photo-fig';
     const img = document.createElement('img');
     img.src = photo;
     img.alt = `Photo for: ${reasonTitleFor(r, i)}`;

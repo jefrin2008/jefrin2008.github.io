@@ -527,6 +527,37 @@
   }
   .photo-actions button.remove { background: rgba(255, 255, 255, 0.18); color: #fff; }
   .photo-actions button:hover { transform: scale(1.05); }
+  .reason-entry {
+    display: flex; align-items: flex-start; gap: 10px;
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.22);
+    border-radius: 14px; padding: 8px;
+  }
+  .reason-entry .photo-thumb {
+    width: 76px; height: 76px; cursor: pointer;
+    display: flex; align-items: center; justify-content: center; text-align: center;
+    font-size: 0.65rem; color: #ffe9f5; line-height: 1.3;
+  }
+  .reason-entry .photo-thumb img { width: 100%; height: 100%; object-fit: cover; }
+  .reason-body { flex: 1; min-width: 0; }
+  .reason-body .re-label { display: block; font-size: 0.7rem; color: var(--gold); margin-bottom: 3px; }
+  .reason-body textarea { min-height: 52px; }
+  .reason-entry.needs-text textarea { border-color: var(--gold); box-shadow: 0 0 0 2px rgba(255, 215, 107, 0.35); }
+  .reason-body .photo-actions { margin-top: 6px; flex-wrap: wrap; }
+  .reason-entry.needs-text .photo-thumb { outline: 2px solid var(--gold); }
+  .share-result { margin-top: 12px; padding: 10px; border-radius: 14px; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.22); }
+  .share-result[hidden], .share-qr[hidden], #share-done[hidden], .share-loading[hidden] { display: none; }
+  .share-result .btn-alt { background: rgba(255, 255, 255, 0.16); border: 1px solid rgba(255, 255, 255, 0.35); color: #fff; }
+  .share-status { font-size: 0.8rem; color: #fff0fb; line-height: 1.45; text-align: center; }
+  .share-status.error { color: var(--gold); }
+  #share-link { margin-top: 8px; text-align: center; font-size: 0.82rem; }
+  .share-actions { display: flex; gap: 8px; margin-top: 8px; }
+  .share-actions button { flex: 1; padding: 9px 10px; }
+  .share-qr-btn { width: 100%; margin-top: 8px; padding: 9px 10px; }
+  .share-qr { margin-top: 10px; text-align: center; }
+  .share-qr canvas { width: 200px; height: 200px; border-radius: 12px; background: #fff; image-rendering: pixelated; }
+  .share-loading { position: fixed; inset: 0; z-index: 60; display: flex; align-items: center; justify-content: center; padding: 24px; text-align: center; color: #fff; font-size: 1.05rem; line-height: 1.5; background: rgba(43, 8, 56, 0.55); }
+  .share-loading.error { color: var(--gold); }
   .setup-btn-group .btn-alt {
     background: rgba(255, 255, 255, 0.16);
     border: 1px solid rgba(255, 255, 255, 0.35);
@@ -673,6 +704,8 @@
 
 <div class="container">
 
+  <div class="share-loading" id="share-loading" hidden><div id="share-loading-text">Opening your surprise 💌...</div></div>
+
   <div id="screen0" class="screen active">
     <div class="card setup-card">
       <h1>Make it yours 💌</h1>
@@ -750,26 +783,33 @@
       <label class="field-label" for="input-greeting">Pet name / greeting</label>
       <input type="text" id="input-greeting" placeholder="e.g. Hey Sweetheart">
 
-      <label class="field-label" for="input-messages">Some notes (one per line)</label>
-      <textarea id="input-messages" rows="3" placeholder="I don't say this enough... but I really Like you ❤️
-You made my normal days feel special... just by being there ✨"></textarea>
-      <div class="field-hint">Leave blank for defaults. 6–8 lines works best.</div>
-
-      <label class="field-label" for="input-reasons">Reasons you Like them (one per line)</label>
-      <textarea id="input-reasons" rows="3" placeholder="💖 The way you laugh at your own jokes before you finish telling them.
-☕ How you make ordinary days feel like an adventure."></textarea>
-      <div class="field-hint">Start a line with an emoji to use it as its icon.</div>
-
-      <label class="field-label">Photos for each reason (optional)</label>
+      <label class="field-label">Photos &amp; reasons (one photo = one reason)</label>
       <div class="photo-list" id="photo-list"></div>
-      <div class="field-hint">Your photo appears next to the matching picture for that reason. Reasons and text stay exactly as they are.</div>
+      <button type="button" class="song-add" onclick="addReasonEntry()">＋ Add photo &amp; reason</button>
+      <div class="field-hint">Add as many photos as you like. Every photo needs its own reason. Start a reason with an emoji to use it as its icon.</div>
+      <textarea id="input-reasons" hidden></textarea>
       <input type="file" id="photo-file" accept="image/*" hidden>
 
       <div class="setup-btn-group">
-        <button class="btn-yes" onclick="shareViaWhatsApp()">Create the Surprise ✨</button>
+        <button class="btn-yes" id="create-btn" type="button" onclick="createShareLink()">🔗 Create Link &amp; Share ✨</button>
         <button class="btn-alt" type="button" onclick="startPreview()">👀 Preview it here</button>
       </div>
-      <div class="field-hint" style="text-align:center; margin-top:8px;">This opens WhatsApp with a link to your surprise. Needs this page hosted online first (e.g. GitHub Pages).</div>
+
+      <div class="share-result" id="share-result" hidden>
+        <div class="share-status" id="share-status"></div>
+        <div id="share-done" hidden>
+          <input type="text" id="share-link" readonly onclick="this.select()">
+          <div class="share-actions">
+            <button class="btn-alt" type="button" onclick="copyShareLink()">📋 Copy link</button>
+            <button class="btn-yes" type="button" onclick="shareLinkOnWhatsApp()">💬 WhatsApp</button>
+          </div>
+          <button class="btn-alt share-qr-btn" type="button" id="qr-toggle" onclick="toggleQR()">▦ Show QR code</button>
+          <div class="share-qr" id="share-qr" hidden>
+            <canvas id="qr-canvas"></canvas>
+            <div class="field-hint">Scan with a phone camera to open the surprise</div>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -978,6 +1018,200 @@ You made my normal days feel special... just by being there ✨"></textarea>
 <div class="game-area" id="game-area"></div>
 
 <script>
+// ============================================================================
+//  SHARE SETUP (one time, free, ~3 minutes)  -  needed so photos can travel in a SHORT link
+//  1. Go to https://console.firebase.google.com  ->  Add project (any name; Analytics off).
+//  2. Build -> Realtime Database -> Create database -> start in LOCKED mode.
+//  3. Open the "Rules" tab, paste this, press Publish:
+//       { "rules": { "surprises": { "$id": {
+//           ".read": true,
+//           ".write": "!data.exists()",
+//           ".validate": "newData.isString() && newData.val().length < 8000000"
+//       } } } }
+//  4. Copy the database URL shown at the top of the "Data" tab
+//     (looks like https://your-project-default-rtdb.firebaseio.com) and paste it below.
+//  5. Upload this HTML file to your website (e.g. GitHub Pages). Done!
+// ============================================================================
+const SHARE_DB_URL = '';
+const shareDbBase = () => SHARE_DB_URL.trim().replace(/\/+$/, '');
+
+// ---------- TINY QR CODE ENCODER (byte mode, error-correction level M, versions 1-10) ----------
+// Used only to show the "scan to open" QR for the share link. No external library needed.
+const QR = (() => {
+  const EC_PER_BLOCK = [10, 16, 26, 18, 24, 16, 18, 22, 22, 26];   // versions 1..10, level M
+  const NUM_BLOCKS   = [1, 1, 1, 2, 2, 4, 4, 4, 5, 5];
+
+  const rawModules = v => {
+    let r = (16 * v + 128) * v + 64;
+    if (v >= 2) { const n = Math.floor(v / 7) + 2; r -= (25 * n - 10) * n - 55; if (v >= 7) r -= 36; }
+    return r;
+  };
+  const dataCodewords = v => Math.floor(rawModules(v) / 8) - EC_PER_BLOCK[v - 1] * NUM_BLOCKS[v - 1];
+
+  const gfMul = (x, y) => { let z = 0; for (let i = 7; i >= 0; i--) { z = (z << 1) ^ ((z >>> 7) * 0x11D); z ^= ((y >>> i) & 1) * x; } return z; };
+  const rsDivisor = deg => {
+    const res = new Array(deg).fill(0); res[deg - 1] = 1; let root = 1;
+    for (let i = 0; i < deg; i++) {
+      for (let j = 0; j < res.length; j++) { res[j] = gfMul(res[j], root); if (j + 1 < res.length) res[j] ^= res[j + 1]; }
+      root = gfMul(root, 2);
+    }
+    return res;
+  };
+  const rsRemainder = (data, div) => {
+    const res = new Array(div.length).fill(0);
+    for (const b of data) { const f = b ^ res.shift(); res.push(0); div.forEach((c, i) => { res[i] ^= gfMul(c, f); }); }
+    return res;
+  };
+  const bit = (x, i) => ((x >>> i) & 1) !== 0;
+
+  function encode(text) {
+    const bytes = Array.from(new TextEncoder().encode(text));
+    let ver = 0;
+    for (let v = 1; v <= 10; v++) {
+      const ccBits = v < 10 ? 8 : 16;
+      if (4 + ccBits + 8 * bytes.length <= dataCodewords(v) * 8) { ver = v; break; }
+    }
+    if (!ver) throw new Error('QR: text too long');
+    const size = ver * 4 + 17;
+
+    // --- data bits ---
+    const bits = [];
+    const push = (val, len) => { for (let i = len - 1; i >= 0; i--) bits.push((val >>> i) & 1); };
+    push(0b0100, 4); push(bytes.length, ver < 10 ? 8 : 16); bytes.forEach(b => push(b, 8));
+    const cap = dataCodewords(ver) * 8;
+    push(0, Math.min(4, cap - bits.length));
+    push(0, (8 - bits.length % 8) % 8);
+    for (let pad = 0xEC; bits.length < cap; pad ^= 0xEC ^ 0x11) push(pad, 8);
+    const data = [];
+    for (let i = 0; i < bits.length; i += 8) { let b = 0; for (let j = 0; j < 8; j++) b = (b << 1) | bits[i + j]; data.push(b); }
+
+    // --- error correction + interleave ---
+    const nb = NUM_BLOCKS[ver - 1], eccLen = EC_PER_BLOCK[ver - 1];
+    const raw = Math.floor(rawModules(ver) / 8);
+    const shortBlocks = nb - raw % nb, shortLen = Math.floor(raw / nb);
+    const div = rsDivisor(eccLen), blocks = [];
+    for (let i = 0, k = 0; i < nb; i++) {
+      const dat = data.slice(k, k + shortLen - eccLen + (i < shortBlocks ? 0 : 1)); k += dat.length;
+      const ecc = rsRemainder(dat, div);
+      if (i < shortBlocks) dat.push(0);
+      blocks.push(dat.concat(ecc));
+    }
+    const all = [];
+    for (let i = 0; i < blocks[0].length; i++)
+      blocks.forEach((blk, j) => { if (i !== shortLen - eccLen || j >= shortBlocks) all.push(blk[i]); });
+
+    // --- matrix ---
+    const mod = Array.from({ length: size }, () => new Array(size).fill(false));
+    const fn  = Array.from({ length: size }, () => new Array(size).fill(false));
+    const setFn = (x, y, dark) => { mod[y][x] = dark; fn[y][x] = true; };
+
+    for (let i = 0; i < size; i++) { setFn(6, i, i % 2 === 0); setFn(i, 6, i % 2 === 0); }
+    const finder = (cx, cy) => {
+      for (let dy = -4; dy <= 4; dy++) for (let dx = -4; dx <= 4; dx++) {
+        const d = Math.max(Math.abs(dx), Math.abs(dy)), x = cx + dx, y = cy + dy;
+        if (x >= 0 && x < size && y >= 0 && y < size) setFn(x, y, d !== 2 && d !== 4);
+      }
+    };
+    finder(3, 3); finder(size - 4, 3); finder(3, size - 4);
+    if (ver >= 2) {
+      const n = Math.floor(ver / 7) + 2;
+      const step = Math.ceil((ver * 4 + 4) / (n * 2 - 2)) * 2;
+      const pos = [6];
+      for (let p = size - 7; pos.length < n; p -= step) pos.splice(1, 0, p);
+      for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) {
+        if ((i === 0 && j === 0) || (i === 0 && j === n - 1) || (i === n - 1 && j === 0)) continue;
+        for (let dy = -2; dy <= 2; dy++) for (let dx = -2; dx <= 2; dx++)
+          setFn(pos[i] + dx, pos[j] + dy, Math.max(Math.abs(dx), Math.abs(dy)) !== 1);
+      }
+    }
+    const drawFormat = mask => {
+      const d = (0 << 3) | mask;            // level M indicator = 0
+      let rem = d; for (let i = 0; i < 10; i++) rem = (rem << 1) ^ ((rem >>> 9) * 0x537);
+      const f = ((d << 10) | rem) ^ 0x5412;
+      for (let i = 0; i <= 5; i++) setFn(8, i, bit(f, i));
+      setFn(8, 7, bit(f, 6)); setFn(8, 8, bit(f, 7)); setFn(7, 8, bit(f, 8));
+      for (let i = 9; i < 15; i++) setFn(14 - i, 8, bit(f, i));
+      for (let i = 0; i < 8; i++) setFn(size - 1 - i, 8, bit(f, i));
+      for (let i = 8; i < 15; i++) setFn(8, size - 15 + i, bit(f, i));
+      setFn(8, size - 8, true);
+    };
+    drawFormat(0);
+    if (ver >= 7) {
+      let rem = ver; for (let i = 0; i < 12; i++) rem = (rem << 1) ^ ((rem >>> 11) * 0x1F25);
+      const v = (ver << 12) | rem;
+      for (let i = 0; i < 18; i++) { const c = bit(v, i), a = size - 11 + i % 3, b = Math.floor(i / 3); setFn(a, b, c); setFn(b, a, c); }
+    }
+
+    // --- place data (zig-zag) ---
+    let k = 0;
+    for (let right = size - 1; right >= 1; right -= 2) {
+      if (right === 6) right = 5;
+      for (let vert = 0; vert < size; vert++) for (let j = 0; j < 2; j++) {
+        const x = right - j, upward = ((right + 1) & 2) === 0, y = upward ? size - 1 - vert : vert;
+        if (!fn[y][x] && k < all.length * 8) { mod[y][x] = bit(all[k >>> 3], 7 - (k & 7)); k++; }
+      }
+    }
+
+    // --- masking ---
+    const applyMask = m => {
+      for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) {
+        let inv;
+        switch (m) {
+          case 0: inv = (x + y) % 2 === 0; break;
+          case 1: inv = y % 2 === 0; break;
+          case 2: inv = x % 3 === 0; break;
+          case 3: inv = (x + y) % 3 === 0; break;
+          case 4: inv = (Math.floor(x / 3) + Math.floor(y / 2)) % 2 === 0; break;
+          case 5: inv = x * y % 2 + x * y % 3 === 0; break;
+          case 6: inv = (x * y % 2 + x * y % 3) % 2 === 0; break;
+          default: inv = ((x + y) % 2 + x * y % 3) % 2 === 0;
+        }
+        if (!fn[y][x] && inv) mod[y][x] = !mod[y][x];
+      }
+    };
+    const penalty = () => {
+      let p = 0;
+      const line = arr => {
+        let run = 1;
+        for (let i = 1; i <= arr.length; i++) {
+          if (i < arr.length && arr[i] === arr[i - 1]) run++;
+          else { if (run >= 5) p += 3 + (run - 5); run = 1; }
+        }
+        const s = arr.map(b => (b ? '1' : '0')).join('');
+        for (const pat of ['00001011101', '10111010000']) { let at = -1; while ((at = s.indexOf(pat, at + 1)) !== -1) p += 40; }
+      };
+      for (let y = 0; y < size; y++) line(mod[y]);
+      for (let x = 0; x < size; x++) line(mod.map(r => r[x]));
+      for (let y = 0; y < size - 1; y++) for (let x = 0; x < size - 1; x++)
+        if (mod[y][x] === mod[y][x + 1] && mod[y][x] === mod[y + 1][x] && mod[y][x] === mod[y + 1][x + 1]) p += 3;
+      let dark = 0; mod.forEach(r => r.forEach(b => { if (b) dark++; }));
+      const total = size * size;
+      p += (Math.ceil(Math.abs(dark * 20 - total * 10) / total) - 1) * 10;
+      return p;
+    };
+    let best = 0, bestP = Infinity;
+    for (let m = 0; m < 8; m++) {
+      applyMask(m); drawFormat(m);
+      const p = penalty();
+      if (p < bestP) { bestP = p; best = m; }
+      applyMask(m);
+    }
+    applyMask(best); drawFormat(best);
+    return mod;
+  }
+
+  function draw(canvas, text, scale = 6, border = 4) {
+    const m = encode(text), n = m.length, px = (n + border * 2) * scale;
+    canvas.width = canvas.height = px;
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, px, px);
+    ctx.fillStyle = '#000';
+    for (let y = 0; y < n; y++) for (let x = 0; x < n; x++)
+      if (m[y][x]) ctx.fillRect((x + border) * scale, (y + border) * scale, scale, scale);
+  }
+  return { encode, draw };
+})();
+
 'use strict';
 
 // ---------- HELPERS ----------
@@ -1101,7 +1335,7 @@ function collectShareData() {
   const occasionVal = document.getElementById('input-occasion').value.trim() || OCCASION_TEXT;
   const nameVal = document.getElementById('input-name').value.trim() || RECIPIENT_NAME;
   const greetingVal = document.getElementById('input-greeting').value.trim() || GREETING_TEXT;
-  const msgLines = parseLines(document.getElementById('input-messages').value);
+  const msgLines = []; // notes always use the built-in defaults
   const reasonLines = parseReasonLines(document.getElementById('input-reasons').value);
   return {
     f: finalTextVal,
@@ -1114,26 +1348,97 @@ function collectShareData() {
     n: nameVal,
     g: greetingVal,
     m: msgLines.length ? msgLines : messages,
-    r: reasonLines.length ? reasonLines : reasons
+    r: reasonLines.length ? reasonLines : reasons,
+    p: USER_REASON_IMAGES
   };
 }
 
-function getShareUrl() {
-  const data = collectShareData();
-  const encoded = encodeURIComponent(JSON.stringify(data));
-  const base = location.href.split('?')[0].split('#')[0];
-  return `${base}?d=${encoded}`;
+function shareBase() {
+  return location.origin + location.pathname.replace(/index\.html$/, '');
 }
 
-function shareViaWhatsApp() {
+function makeShareId() {
+  const chars = 'abcdefghjkmnpqrstuvwxyz23456789';
+  const rnd = new Uint32Array(8);
+  crypto.getRandomValues(rnd);
+  return Array.from(rnd, n => chars[n % chars.length]).join('');
+}
+
+let lastShareUrl = '';
+
+async function createShareLink() {
+  const err = validateReasonEntries();
+  if (err) { alert(err); return; }
+
+  const panel = document.getElementById('share-result');
+  const status = document.getElementById('share-status');
+  const done = document.getElementById('share-done');
+  const btn = document.getElementById('create-btn');
+  panel.hidden = false;
+  done.hidden = true;
+  status.classList.remove('error');
+
   if (location.protocol === 'file:') {
-    alert('Upload this page online first (e.g. GitHub Pages) so the shared link actually opens for the other person.');
+    status.classList.add('error');
+    status.textContent = 'Open this page from your website (the https:// address) to create a link. A file opened from your computer cannot be shared.';
     return;
   }
-  const data = collectShareData();
-  const url = getShareUrl();
-  const message = `I made a little surprise for you, ${data.n} 💕 Open it here: ${url}`;
+  if (!SHARE_DB_URL.trim()) {
+    status.classList.add('error');
+    status.textContent = 'One-time setup needed: open this HTML file, find SHARE_DB_URL near the top, and paste your free Firebase database URL there (the steps are written right above it).';
+    return;
+  }
+
+  btn.disabled = true;
+  status.textContent = 'Uploading your surprise... 💌';
+  try {
+    const data = collectShareData();
+    const body = JSON.stringify(JSON.stringify(data));
+    if (body.length > 7500000) throw new Error('too many photos, remove a few');
+    const id = makeShareId();
+    const res = await fetch(shareDbBase() + '/surprises/' + id + '.json', { method: 'PUT', body });
+    if (!res.ok) throw new Error('server said ' + res.status);
+    lastShareUrl = shareBase() + '?s=' + id;
+    document.getElementById('share-link').value = lastShareUrl;
+    document.getElementById('share-qr').hidden = true;
+    document.getElementById('qr-toggle').textContent = '▦ Show QR code';
+    status.textContent = 'Your surprise is ready! 🎉 Send this link:';
+    done.hidden = false;
+  } catch (e) {
+    status.classList.add('error');
+    status.textContent = "Couldn't upload (" + e.message + "). Check your internet and try again.";
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+function copyShareLink() {
+  const input = document.getElementById('share-link');
+  const ok = () => { const s = document.getElementById('share-status'); s.textContent = 'Link copied ✅'; };
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(lastShareUrl).then(ok, () => { input.select(); document.execCommand('copy'); ok(); });
+  } else {
+    input.select(); document.execCommand('copy'); ok();
+  }
+}
+
+function shareLinkOnWhatsApp() {
+  const name = document.getElementById('input-name').value.trim() || RECIPIENT_NAME;
+  const message = `I made a little surprise for you, ${name} 💕 Open it here: ${lastShareUrl}`;
   window.open('https://wa.me/?text=' + encodeURIComponent(message), '_blank');
+}
+
+function toggleQR() {
+  const box = document.getElementById('share-qr');
+  const btn = document.getElementById('qr-toggle');
+  if (!box.hidden) { box.hidden = true; btn.textContent = '▦ Show QR code'; return; }
+  try {
+    QR.draw(document.getElementById('qr-canvas'), lastShareUrl);
+    box.hidden = false;
+    btn.textContent = '▦ Hide QR code';
+  } catch (e) {
+    alert("Couldn't make the QR code for this link.");
+  }
 }
 
 // ---------- FAVORITE SONG (full song: starts with the countdown, plays to the very end) ----------
@@ -1456,26 +1761,41 @@ function tickClock() {
     setTimeout(() => showScreen('screen2'), 500);
   }
 }
-// If this page was opened from a shared WhatsApp/link (?d=...), load that data and jump straight in.
-function tryLoadFromShareLink() {
-  const raw = new URLSearchParams(location.search).get('d');
-  if (!raw) return false;
+// If this page was opened from a shared link (?s=...), fetch that surprise and jump straight in.
+function applySharedData(data) {
+  if (data.f) FINAL_TEXT = data.f;
+  if (data.al) ASK_LOVE_TEXT = data.al;
+  if (data.rh) REASONS_HEADING_TEXT = data.rh;
+  if (data.ot) OUTING_TEXT = data.ot;
+  if (data.os) OUTING_SUB_TEXT = data.os;
+  if (data.fst) FINAL_SUB_TAIL = data.fst;
+  if (data.o) OCCASION_TEXT = data.o;
+  if (data.n) RECIPIENT_NAME = data.n;
+  if (data.g) GREETING_TEXT = data.g;
+  if (Array.isArray(data.m) && data.m.length) messages = data.m;
+  reasons = Array.isArray(data.r) ? data.r : [];
+  USER_REASON_IMAGES = (data.p && typeof data.p === 'object') ? data.p : {};
+}
+
+async function loadSharedSurprise(id) {
+  const s0 = document.getElementById('screen0');
+  if (s0) s0.classList.remove('active');
+  const box = document.getElementById('share-loading');
+  const msg = document.getElementById('share-loading-text');
+  box.classList.remove('error');
+  box.hidden = false;
   try {
-    const data = JSON.parse(decodeURIComponent(raw));
-    if (data.f) FINAL_TEXT = data.f;
-    if (data.al) ASK_LOVE_TEXT = data.al;
-    if (data.rh) REASONS_HEADING_TEXT = data.rh;
-    if (data.ot) OUTING_TEXT = data.ot;
-    if (data.os) OUTING_SUB_TEXT = data.os;
-    if (data.fst) FINAL_SUB_TAIL = data.fst;
-    if (data.o) OCCASION_TEXT = data.o;
-    if (data.n) RECIPIENT_NAME = data.n;
-    if (data.g) GREETING_TEXT = data.g;
-    if (Array.isArray(data.m) && data.m.length) messages = data.m;
-    if (Array.isArray(data.r) && data.r.length) reasons = data.r;
-    return true;
+    if (!SHARE_DB_URL.trim()) throw new Error('sharing is not set up');
+    const res = await fetch(shareDbBase() + '/surprises/' + encodeURIComponent(id) + '.json');
+    if (!res.ok) throw new Error('server said ' + res.status);
+    const raw = await res.json();
+    if (!raw) throw new Error('not found');
+    applySharedData(JSON.parse(raw));
+    box.hidden = true;
+    startSurpriseView();
   } catch (e) {
-    return false;
+    box.classList.add('error');
+    msg.textContent = "Sorry, this surprise couldn't be opened 💔 (" + e.message + "). Please check the link and your internet.";
   }
 }
 // NOTE: the actual call happens further below, after `messages` and `reasons`
@@ -1653,14 +1973,13 @@ function openGift() {
 
 // ---------- SCREEN 4b: REASONS ----------
 /* DEFAULT_REASONS_START */
-let reasons = [{"icon":"\ud83d\udc96","title":"Your Laugh","text":"The way you laugh at your own jokes before you even finish telling them."},{"icon":"\u2615","title":"Everyday Adventures","text":"How you somehow make even the most ordinary days feel like an adventure."},{"icon":"\ud83c\udf19","title":"Late Night Talks","text":"Every late night conversation that somehow becomes one of my favorite memories."},{"icon":"\ud83c\udfb5","title":"Your Little Songs","text":"The little songs you hum without even realizing it."},{"icon":"\ud83e\udd0d","title":"My Safe Place","text":"How calm and safe I feel whenever you're around."},{"icon":"\u2728","title":"Just You Being You","text":"Simply... you being you. That has always been more than enough."}];
+let reasons = [];
 /* DEFAULT_REASONS_END */
 let reasonIndex = 0;
 
 // Now that `messages` and `reasons` both exist, it's safe to check for a shared
 // link (?d=...) and jump straight into the surprise if this came from one.
-const loadedFromLink = tryLoadFromShareLink();
-if (loadedFromLink || !document.getElementById('screen0')) {
+function startSurpriseView() {
   applyName(document, OCCASION_TEXT, RECIPIENT_NAME);
   applyGreeting(document, GREETING_TEXT);
   applyFinalText(document, FINAL_TEXT);
@@ -1674,85 +1993,9 @@ if (loadedFromLink || !document.getElementById('screen0')) {
   showScreen('screen1');
   tickClock();
 }
-
-// ---------- REASON ILLUSTRATIONS (default images, matched to each reason) ----------
-const ILLUSTRATIONS = (() => {
-  const wrap = (bg1, bg2, body) => `<svg viewBox="0 0 200 150" xmlns="http://www.w3.org/2000/svg" role="img" preserveAspectRatio="xMidYMid slice">
-    <defs><linearGradient id="ib-${bg1.slice(1)}" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="${bg1}"/><stop offset="1" stop-color="${bg2}"/></linearGradient></defs>
-    <rect width="200" height="150" fill="url(#ib-${bg1.slice(1)})"/>${body}</svg>`;
-  const heart = (x, y, s, c, o = 1) => `<path transform="translate(${x} ${y}) scale(${s})" d="M0 8 C-14 -4 -6 -16 0 -8 C6 -16 14 -4 0 8Z" fill="${c}" opacity="${o}"/>`;
-  const star = (x, y, r, c, o = 1) => `<path transform="translate(${x} ${y}) scale(${r})" d="M0-1 L.24-.32 L.95-.31 L.39.13 L.59.81 L0.4 .4 L-.59.81 L-.39.13 L-.95-.31 L-.24-.32Z" fill="${c}" opacity="${o}"/>`;
-
-  return {
-    // 💖 laugh
-    laugh: wrap('#ff77a9', '#8c106a', `
-      ${heart(30, 32, 1.2, '#fff', .5)}${heart(170, 40, 1.5, '#fff', .45)}${heart(160, 118, 1, '#ffd1f7', .6)}${heart(38, 112, .9, '#ffd1f7', .5)}
-      <circle cx="100" cy="78" r="44" fill="#ffd76b"/><circle cx="100" cy="78" r="44" fill="none" stroke="#fff6da" stroke-width="3" opacity=".6"/>
-      <path d="M78 66 q6 -8 12 0" stroke="#5a1a4a" stroke-width="4" fill="none" stroke-linecap="round"/>
-      <path d="M110 66 q6 -8 12 0" stroke="#5a1a4a" stroke-width="4" fill="none" stroke-linecap="round"/>
-      <path d="M74 84 Q100 122 126 84 Z" fill="#5a1a4a"/><path d="M84 100 Q100 112 116 100 Q100 106 84 100Z" fill="#ff77a9"/>
-      <circle cx="72" cy="86" r="7" fill="#ff4081" opacity=".45"/><circle cx="128" cy="86" r="7" fill="#ff4081" opacity=".45"/>
-      <path d="M52 100 q-6 8 0 12 q6 -2 4 -12z" fill="#8fd9ff"/>`),
-    // ☕ everyday adventure
-    adventure: wrap('#ffb56b', '#d42c8d', `
-      <circle cx="150" cy="40" r="20" fill="#fff6da" opacity=".9"/>
-      <path d="M0 110 L45 62 L80 100 L118 54 L160 104 L200 78 V150 H0Z" fill="#6a0f6e" opacity=".75"/>
-      <path d="M0 128 Q50 104 100 122 T200 112 V150 H0Z" fill="#2b0838"/>
-      <path d="M118 54 l-9 12 h18z" fill="#fff" opacity=".8"/>
-      <g transform="translate(70 62)"><rect x="0" y="16" width="34" height="30" rx="6" fill="#fff"/><path d="M34 22 h8 a8 8 0 0 1 0 18 h-8" fill="none" stroke="#fff" stroke-width="5"/>
-      <rect x="4" y="20" width="26" height="6" rx="3" fill="#ffd76b"/>
-      <path d="M9 8 q-5 -6 0 -12 M19 8 q-5 -6 0 -12 M29 8 q-5 -6 0 -12" stroke="#fff6da" stroke-width="3" fill="none" stroke-linecap="round" opacity=".85"/></g>
-      ${star(30, 30, 9, '#fff6da', .9)}${star(176, 96, 6, '#fff6da', .7)}`),
-    // 🌙 late night
-    night: wrap('#2b0838', '#5a1a8a', `
-      ${Array.from({length: 22}, (_, i) => `<circle cx="${(i * 47) % 200}" cy="${(i * 31) % 100 + 6}" r="${(i % 3) * .6 + .8}" fill="#fff6da" opacity="${.4 + (i % 4) * .15}"/>`).join('')}
-      <circle cx="140" cy="46" r="26" fill="#fff6da"/><circle cx="152" cy="40" r="24" fill="#3a0f55"/>
-      <path d="M0 122 Q60 96 120 116 T200 104 V150 H0Z" fill="#1a0524"/>
-      <rect x="38" y="82" width="46" height="32" rx="10" fill="#ff77a9"/><path d="M52 114 l-6 12 l16 -12z" fill="#ff77a9"/>
-      <rect x="92" y="94" width="46" height="30" rx="10" fill="#8fd9ff"/><path d="M124 124 l8 10 l-2 -10z" fill="#8fd9ff"/>
-      <circle cx="52" cy="98" r="2.6" fill="#fff"/><circle cx="61" cy="98" r="2.6" fill="#fff"/><circle cx="70" cy="98" r="2.6" fill="#fff"/>
-      <rect x="102" y="106" width="26" height="3" rx="1.5" fill="#fff"/><rect x="102" y="112" width="16" height="3" rx="1.5" fill="#fff" opacity=".7"/>
-      ${heart(160, 96, 1.1, '#ff4081')}`),
-    // 🎵 little songs
-    songs: wrap('#8fd9ff', '#8c106a', `
-      <g fill="none" stroke="#fff" stroke-width="2" opacity=".35"><path d="M0 40 Q50 26 100 40 T200 40"/><path d="M0 52 Q50 38 100 52 T200 52"/><path d="M0 64 Q50 50 100 64 T200 64"/></g>
-      <g fill="#fff"><ellipse cx="66" cy="102" rx="14" ry="10" transform="rotate(-20 66 102)"/><rect x="77" y="46" width="5" height="56" rx="2"/>
-      <ellipse cx="128" cy="112" rx="14" ry="10" transform="rotate(-20 128 112)"/><rect x="139" y="56" width="5" height="56" rx="2"/>
-      <path d="M77 46 L144 56 V70 L77 60Z"/></g>
-      ${heart(30, 100, 1, '#ffd1f7', .8)}${star(170, 40, 8, '#fff6da', .9)}${star(30, 36, 5, '#fff6da', .7)}${heart(172, 118, .8, '#ffd1f7', .7)}`),
-    // 🤍 calm & safe
-    safe: wrap('#ffd1f7', '#8fd9ff', `
-      <circle cx="100" cy="76" r="58" fill="#fff" opacity=".35"/><circle cx="100" cy="76" r="40" fill="#fff" opacity=".4"/>
-      <path d="M100 118 C40 78 62 34 100 62 C138 34 160 78 100 118Z" fill="#fff"/>
-      <path d="M100 118 C40 78 62 34 100 62" fill="none" stroke="#ff9cc9" stroke-width="3" opacity=".6"/>
-      <path d="M52 128 Q100 100 148 128" fill="none" stroke="#fff" stroke-width="5" stroke-linecap="round" opacity=".8"/>
-      <path d="M36 28 q10 -8 20 0 q10 -8 20 0" stroke="#fff" stroke-width="4" fill="none" stroke-linecap="round" opacity=".9"/>
-      ${star(164, 34, 7, '#fff', .95)}${star(40, 108, 5, '#fff', .8)}`),
-    // ✨ you being you
-    sparkle: wrap('#ffd76b', '#d42c8d', `
-      ${star(100, 74, 46, '#fff6da')}${star(100, 74, 30, '#fff', .8)}
-      ${star(40, 36, 14, '#fff6da', .95)}${star(162, 42, 11, '#fff', .9)}${star(156, 118, 15, '#fff6da', .9)}${star(44, 114, 9, '#fff', .8)}${star(180, 82, 6, '#fff6da', .8)}${star(20, 76, 6, '#fff', .8)}
-      ${heart(100, 74, 1.4, '#ff4081')}`),
-    // fallback for custom emoji
-    generic: wrap('#ff4081', '#6a0f6e', `
-      ${heart(100, 74, 6, '#fff', .95)}${heart(52, 40, 1.4, '#ffd1f7', .8)}${heart(152, 44, 1.1, '#ffd1f7', .7)}${heart(158, 116, 1.3, '#ffd1f7', .8)}${heart(46, 112, 1, '#ffd1f7', .6)}
-      ${star(100, 24, 8, '#fff6da', .9)}${star(176, 82, 6, '#fff6da', .8)}${star(22, 78, 6, '#fff6da', .8)}`)
-  };
-})();
-
-const ICON_TO_ILLUSTRATION = {
-  '💖': 'laugh', '😂': 'laugh', '😄': 'laugh', '😊': 'laugh', '🤣': 'laugh',
-  '☕': 'adventure', '🌄': 'adventure', '🏔': 'adventure', '🧭': 'adventure', '🚗': 'adventure',
-  '🌙': 'night', '🌛': 'night', '🌃': 'night', '💬': 'night', '🌌': 'night',
-  '🎵': 'songs', '🎶': 'songs', '🎤': 'songs', '🎧': 'songs', '🎸': 'songs',
-  '🤍': 'safe', '🫂': 'safe', '🏡': 'safe', '🕊': 'safe',
-  '✨': 'sparkle', '🌟': 'sparkle', '⭐': 'sparkle'
-};
-
-function illustrationFor(reason) {
-  const icon = (reason.icon || '').replace(/\uFE0F/g, '');
-  return ILLUSTRATIONS[ICON_TO_ILLUSTRATION[icon] || 'generic'];
-}
+const SHARE_ID = new URLSearchParams(location.search).get('s');
+if (SHARE_ID) loadSharedSurprise(SHARE_ID);
+else if (!document.getElementById('screen0')) startSurpriseView();
 
 function reasonTitleFor(reason, i) {
   return reason.title || `Reason ${i + 1}`;
@@ -1764,85 +2007,106 @@ function renderReasonMedia(i) {
   const photo = USER_REASON_IMAGES[i];
   media.innerHTML = '';
   media.classList.toggle('has-photo', !!photo);
+  if (!photo) return;
 
-  // Default illustration only when no photo was uploaded; otherwise show just the user's photo
-  if (!photo) {
-    const art = document.createElement('figure');
-    art.className = 'reason-fig';
-    art.innerHTML = illustrationFor(r);
-    media.appendChild(art);
-  }
-
-  if (photo) {
-    const fig = document.createElement('figure');
-    fig.className = 'reason-fig photo-fig';
-    const img = document.createElement('img');
-    img.src = photo;
-    img.alt = `Photo for: ${reasonTitleFor(r, i)}`;
-    const cap = document.createElement('figcaption');
-    cap.textContent = 'Our moment';
-    fig.appendChild(img);
-    fig.appendChild(cap);
-    media.appendChild(fig);
-  }
+  const fig = document.createElement('figure');
+  fig.className = 'reason-fig photo-fig';
+  const img = document.createElement('img');
+  img.src = photo;
+  img.alt = `Photo for: ${reasonTitleFor(r, i)}`;
+  const cap = document.createElement('figcaption');
+  cap.textContent = 'Our moment';
+  fig.appendChild(img);
+  fig.appendChild(cap);
+  media.appendChild(fig);
 }
 
-// ---------- SETUP: PHOTO PICKER PER REASON ----------
-let photoTargetIndex = null;
+// ---------- SETUP: PHOTO + REASON ENTRIES ----------
+// Each entry = one photo + the reason you like them for that photo.
+let reasonEntries = [{ photo: null, text: '' }];
+let reasonsTouched = false;
+let photoTargetIndex = null; // number = replace that entry's photo, 'new' = create a new entry
 
-function currentReasonList() {
+// Keeps the hidden #input-reasons textarea (one reason per line) and USER_REASON_IMAGES in step.
+function syncReasons() {
   const ta = document.getElementById('input-reasons');
-  const custom = ta ? parseReasonLines(ta.value) : [];
-  return custom.length ? custom : reasons;
+  const lines = [];
+  const images = {};
+  reasonEntries.forEach(e => {
+    const text = e.text.replace(/\s*\n\s*/g, ' ').trim();
+    if (!text) return; // a photo without a reason is skipped until a reason is typed
+    if (e.photo) images[lines.length] = e.photo;
+    lines.push(text);
+  });
+  USER_REASON_IMAGES = images;
+  if (ta) ta.value = lines.join('\n');
 }
 
 function renderPhotoRows() {
   const list = document.getElementById('photo-list');
   if (!list) return;
   list.innerHTML = '';
-  currentReasonList().forEach((r, i) => {
+  reasonEntries.forEach((e, i) => {
     const row = document.createElement('div');
-    row.className = 'photo-row';
+    row.className = 'reason-entry' + (e.photo && !e.text.trim() ? ' needs-text' : '');
 
     const thumb = document.createElement('div');
     thumb.className = 'photo-thumb';
-    if (USER_REASON_IMAGES[i]) {
+    thumb.onclick = () => pickPhoto(i);
+    if (e.photo) {
       const img = document.createElement('img');
-      img.src = USER_REASON_IMAGES[i];
+      img.src = e.photo;
       img.alt = '';
       thumb.appendChild(img);
     } else {
-      thumb.innerHTML = illustrationFor(r);
+      thumb.innerHTML = '📷<br>Tap to<br>add photo';
     }
 
-    const info = document.createElement('div');
-    info.className = 'photo-info';
-    const b = document.createElement('b');
-    b.textContent = `${r.icon} ${reasonTitleFor(r, i)}`;
-    const s = document.createElement('span');
-    s.textContent = r.text;
-    info.appendChild(b);
-    info.appendChild(s);
+    const body = document.createElement('div');
+    body.className = 'reason-body';
+    const label = document.createElement('span');
+    label.className = 're-label';
+    label.textContent = `Reason ${i + 1} — why do you like them for this photo?`;
+    const ta = document.createElement('textarea');
+    ta.rows = 2;
+    ta.placeholder = '💖 Write the reason for this photo...';
+    ta.value = e.text;
+    ta.addEventListener('input', () => {
+      e.text = ta.value;
+      reasonsTouched = true;
+      row.classList.toggle('needs-text', !!e.photo && !ta.value.trim());
+      syncReasons();
+    });
 
     const actions = document.createElement('div');
     actions.className = 'photo-actions';
     const add = document.createElement('button');
     add.type = 'button';
-    add.textContent = USER_REASON_IMAGES[i] ? 'Replace' : 'Add photo';
+    add.textContent = e.photo ? 'Replace photo' : 'Add photo';
     add.onclick = () => pickPhoto(i);
     actions.appendChild(add);
-    if (USER_REASON_IMAGES[i]) {
+    if (e.photo) {
       const rm = document.createElement('button');
       rm.type = 'button';
       rm.className = 'remove';
-      rm.textContent = 'Remove';
-      rm.onclick = () => { delete USER_REASON_IMAGES[i]; renderPhotoRows(); };
+      rm.textContent = 'Remove photo';
+      rm.onclick = () => { e.photo = null; reasonsTouched = true; syncReasons(); renderPhotoRows(); };
       actions.appendChild(rm);
     }
+    if (reasonEntries.length > 1) {
+      const del = document.createElement('button');
+      del.type = 'button';
+      del.className = 'remove';
+      del.textContent = 'Delete';
+      del.onclick = () => { reasonEntries.splice(i, 1); reasonsTouched = true; syncReasons(); renderPhotoRows(); };
+      actions.appendChild(del);
+    }
 
+    body.appendChild(label);
+    body.appendChild(ta);
+    body.appendChild(actions);
     row.appendChild(thumb);
-    row.appendChild(info);
-    row.appendChild(actions);
+    row.appendChild(body);
     list.appendChild(row);
   });
 }
@@ -1854,22 +2118,56 @@ function pickPhoto(i) {
   input.click();
 }
 
+// Every photo needs a reason and every reason needs a photo (empty rows are ignored)
+function validateReasonEntries() {
+  const rows = document.querySelectorAll('#photo-list .reason-entry');
+  let msg = null;
+  reasonEntries.forEach((e, i) => {
+    const hasText = !!e.text.trim();
+    const bad = (!!e.photo) !== hasText;
+    if (rows[i]) rows[i].classList.toggle('needs-text', bad);
+    if (bad && !msg) msg = e.photo ? `Photo ${i + 1} needs a reason. Please write one.` : `Reason ${i + 1} needs a photo. Please add one.`;
+  });
+  if (msg) { const bad = document.querySelector('#photo-list .needs-text'); if (bad) bad.scrollIntoView({ block: 'center', behavior: 'smooth' }); }
+  return msg;
+}
+
+// "＋ Add photo & reason": choose the photo first, then the reason box opens for it
+function addReasonEntry() {
+  pickPhoto('new');
+}
+
 function handlePhotoFile(file) {
   if (!file || !file.type.startsWith('image/') || photoTargetIndex === null) return;
-  const idx = photoTargetIndex;
+  const target = photoTargetIndex;
   const reader = new FileReader();
   reader.onload = e => {
     const img = new Image();
     img.onload = () => {
       // Downscale so the saved copy stays a reasonable size
-      const max = 900;
+      const max = 800;
       const scale = Math.min(1, max / Math.max(img.width, img.height));
       const canvas = document.createElement('canvas');
       canvas.width = Math.round(img.width * scale);
       canvas.height = Math.round(img.height * scale);
       canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
-      USER_REASON_IMAGES[idx] = canvas.toDataURL('image/jpeg', 0.82);
+      const data = canvas.toDataURL('image/jpeg', 0.72);
+      reasonsTouched = true;
+      if (target === 'new') {
+        // reuse the empty starter row if it is still untouched, otherwise add a new one
+        const first = reasonEntries[0];
+        if (reasonEntries.length === 1 && !first.photo && !first.text.trim()) first.photo = data;
+        else reasonEntries.push({ photo: data, text: '' });
+      } else if (reasonEntries[target]) {
+        reasonEntries[target].photo = data;
+      }
+      syncReasons();
       renderPhotoRows();
+      if (target === 'new') {
+        const boxes = document.querySelectorAll('#photo-list textarea');
+        const last = boxes[boxes.length - 1];
+        if (last) { last.focus(); last.scrollIntoView({ block: 'center', behavior: 'smooth' }); }
+      }
     };
     img.src = e.target.result;
   };
@@ -1878,13 +2176,13 @@ function handlePhotoFile(file) {
 
 (function initPhotoPicker() {
   const input = document.getElementById('photo-file');
-  const ta = document.getElementById('input-reasons');
   if (input) input.addEventListener('change', () => handlePhotoFile(input.files[0]));
-  if (ta) ta.addEventListener('input', renderPhotoRows);
 })();
 
-// ---------- PREVIEW + DOWNLOAD ----------
+// ---------- PREVIEW ----------
 function startPreview() {
+  const err = validateReasonEntries();
+  if (err) { alert(err); return; }
   const d = collectShareData();
   FINAL_TEXT = d.f; ASK_LOVE_TEXT = d.al; REASONS_HEADING_TEXT = d.rh;
   OUTING_TEXT = d.ot; OCCASION_TEXT = d.o; RECIPIENT_NAME = d.n; GREETING_TEXT = d.g;
@@ -1928,14 +2226,18 @@ function nextReason() {
   if (reasonIndex < reasons.length - 1) {
     reasonIndex++;
     renderReason();
-  } else if (VIDEO_CLIP) {
-    goToVideo();
   } else {
-    goToScreen5();
+    afterReasons();
   }
 }
 
+function afterReasons() {
+  if (VIDEO_CLIP) goToVideo();
+  else goToScreen5();
+}
+
 function goToReasons() {
+  if (!reasons.length) { afterReasons(); return; } // no photos added: skip this section
   reasonIndex = 0;
   renderReason();
   showScreen('screen4b');

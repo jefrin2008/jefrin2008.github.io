@@ -1501,9 +1501,9 @@ async function createShareLink() {
   }
 }
 
-function copyShareLink() {
+function copyShareLink(doneMsg) {
   const input = document.getElementById('share-link');
-  const ok = () => { const s = document.getElementById('share-status'); s.textContent = 'Link copied ✅'; };
+  const ok = () => { const s = document.getElementById('share-status'); s.textContent = (typeof doneMsg === 'string' && doneMsg) || 'Link copied ✅'; };
   if (navigator.clipboard && navigator.clipboard.writeText) {
     navigator.clipboard.writeText(lastShareUrl).then(ok, () => { input.select(); document.execCommand('copy'); ok(); });
   } else {
@@ -1516,9 +1516,7 @@ function shareLinkOnWhatsApp() {
   // Link goes on its own last line so WhatsApp shows the preview card under the message.
   if (lastShareUrl.length > 6000) {
     // Very long link: too big for a wa.me address, so copy it and let them paste it in the chat.
-    copyShareLink();
-    const st = document.getElementById('share-status');
-    st.textContent = 'Link copied ✅ Now open WhatsApp, choose the chat and paste it 👇';
+    copyShareLink('Link copied ✅ Now open WhatsApp, choose the chat and paste it 👇');
     window.open('https://wa.me/?text=' + encodeURIComponent(`I made a little surprise for you, ${name} 💕\nOpen it here 👇\n`), '_blank');
     return;
   }
@@ -1909,7 +1907,9 @@ async function loadSharedSurprise(id, inline) {
     startSurpriseView();
   } catch (e) {
     box.classList.add('error');
-    msg.textContent = "Sorry, this surprise couldn't be opened 💔 (" + e.message + "). Please check the link and your internet.";
+    msg.textContent = inline
+      ? "Sorry, this link looks incomplete or broken 💔 (WhatsApp may have cut it). Please ask for the link again."
+      : "Sorry, this surprise couldn't be opened 💔 (" + e.message + "). Please check the link and your internet.";
   }
 }
 // NOTE: the actual call happens further below, after `messages` and `reasons`

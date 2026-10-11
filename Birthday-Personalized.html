@@ -761,10 +761,10 @@
 
       <div class="song-box" id="song-box">
         <label class="field-label">🎵 Favorite Song</label>
-        <input type="file" id="song-file" accept="audio/*" hidden>
+        <input type="file" id="song-file" accept="audio/*,.mp3,.m4a,.aac,.wav,.ogg,.oga,.opus,.flac,.weba,.mp4" hidden>
         <div class="song-empty" id="song-empty">
           <button type="button" class="song-add" onclick="document.getElementById('song-file').click()">＋ Add favorite song</button>
-          <div class="field-hint">The first 30 seconds of the song play automatically from the start of the countdown (with a soft fade-out). To make it play in the shared link, tap ⬇️ Download after you create the link and upload the file to your website (GitHub) next to this HTML.</div>
+          <div class="field-hint">The first 30 seconds of the song play automatically from the start of the countdown (with a soft fade-out). To make it play in the shared link, any song format works. After you create the link, one tap uploads it to your website for you.</div>
         </div>
         <div class="song-status" id="song-status" hidden>
           <div class="song-icon" id="song-icon">🎵</div>
@@ -784,7 +784,7 @@
         <input type="file" id="video-file" accept="video/*,.mp4,.m4v,.mov,.webm,.mkv,.avi,.3gp,.ogv" hidden>
         <div class="song-empty" id="video-empty">
           <button type="button" class="song-add" onclick="document.getElementById('video-file').click()">＋ Add video clip</button>
-          <div class="field-hint">Plays right after the photos &amp; notes, with your song. MP4 works everywhere; MOV, WebM, M4V work if your browser supports them. (For the shared link, upload the video file to your website (GitHub) next to this HTML. A ⬇️ Download button with the right file name appears after you create the link.)</div>
+          <div class="field-hint">Plays right after the photos &amp; notes, with your song. MP4 works everywhere; MOV, WebM, M4V work if your browser supports them. Any video format your browser can play works. After you create the link, one tap uploads it for you.</div>
         </div>
         <div class="song-status" id="video-status" hidden>
           <div class="song-icon" id="video-icon">🎬</div>
@@ -1487,7 +1487,7 @@ function shrinkPhoto(dataUrl, max, q) {
 
 let lastShareUrl = '';
 let lastQrUrl = '';        // short link for the QR code (photos are website files instead of being inside the link)
-let photoFiles = [];       // [{ name, dataUrl }] photos to upload next to the HTML for the short link
+let hostedMedia = [];      // [{ kind, name, blob?, dataUrl? }] files that live on the website (song clip, video, photos for the short link)
 
 async function createShareLink() {
   const err = validateReasonEntries();
@@ -1510,8 +1510,17 @@ async function createShareLink() {
   status.textContent = 'Making your link... 💌';
   try {
     const data = collectShareData();
-    if (SONG_CLIP && SONG_CLIP.file) data.a = SONG_CLIP.file;
-    if (VIDEO_CLIP && VIDEO_CLIP.file) data.v = VIDEO_CLIP.file;
+    const sid = makeShareId();
+    hostedMedia = [];
+    if (SONG_CLIP && SONG_CLIP.blob) {
+      status.textContent = 'Preparing your song… 🎵';
+      const s = await makeSongClip(SONG_CLIP.blob, sid);
+      hostedMedia.push(s); data.a = s.name;
+    }
+    if (VIDEO_CLIP && VIDEO_CLIP.blob) {
+      const vn = sid + '-video.' + fileExt(VIDEO_CLIP.blob.name, 'mp4');
+      hostedMedia.push({ kind: 'video', name: vn, blob: VIDEO_CLIP.blob }); data.v = vn;
+    }
     if (SHARE_DB_URL.trim()) {
       // Optional short-link mode (Firebase)
       const body = JSON.stringify(JSON.stringify(data));
@@ -1520,7 +1529,7 @@ async function createShareLink() {
       const res = await fetch(shareDbBase() + '/surprises/' + id + '.json', { method: 'PUT', body });
       if (!res.ok) throw new Error('server said ' + res.status);
       lastShareUrl = shareBase() + '?s=' + id;
-      lastQrUrl = lastShareUrl; photoFiles = [];
+      lastQrUrl = lastShareUrl;
     } else {
       // No database needed: everything travels inside the link itself (after the #).
       let enc = '';
@@ -1537,12 +1546,11 @@ async function createShareLink() {
       lastShareUrl = shareBase() + '#d=' + enc;
 
       // Short link for the QR code: the photos are NOT inside it, only their file names (photo-1.jpg ...).
-      photoFiles = [];
       const names = {};
       for (const k of Object.keys(data.p || {})) {
-        const name = 'photo-' + (Number(k) + 1) + '.jpg';
+        const name = sid + '-photo-' + (Number(k) + 1) + '.jpg';
         names[k] = name;
-        photoFiles.push({ name, dataUrl: data.p[k] });
+        hostedMedia.push({ kind: 'photo', name, dataUrl: data.p[k] });
       }
       const compact = Object.assign({}, slim);
       delete compact.p;
@@ -1555,7 +1563,7 @@ async function createShareLink() {
     document.getElementById('qr-toggle').textContent = '▦ Show QR code';
     status.textContent = lastShareUrl.length > 6000 ? 'Your surprise is ready! 🎉 The link is long (because of the photos). Tap 💬 WhatsApp and pick WhatsApp from the list, or tap 📋 Copy link and paste it in the chat.' : 'Your surprise is ready! 🎉 Send this link:';
     done.hidden = false;
-    checkHostedMedia();
+    buildMediaPanel();
   } catch (e) {
     status.classList.add('error');
     status.textContent = "Couldn't upload (" + e.message + "). Check your internet and try again.";
@@ -1629,8 +1637,8 @@ function toggleQR() {
   try {
     QR.draw(canvas, lastQrUrl || lastShareUrl);
     canvas.hidden = false; actions.hidden = false; hint.hidden = false; msg.hidden = true;
-    hint.textContent = photoFiles.length
-      ? 'Scan with a phone camera. For the QR to show your photos 📷, upload the photo files (see the list above) to GitHub first.'
+    hint.textContent = hostedMedia.some(m => m.kind === 'photo')
+      ? 'Scan with a phone camera. The photos, song and video must be uploaded first (use the 🚀 Upload button above).'
       : 'Scan with a phone camera to open the surprise';
   } catch (e) {
     canvas.hidden = true; actions.hidden = true; hint.hidden = true;
@@ -1676,79 +1684,200 @@ async function shareQRImage() {
   saveQRImage();   // this device can't share files directly: save the image instead
 }
 
-// Song / video (and the photos used by the QR short link) are NOT inside the link:
-// the same files must be uploaded next to this HTML on the website. We give them simple names and a Download button.
+// ---------- HOSTED FILES: song clip, video and photos (for the short link / QR code) ----------
+// Any file type the browser can open works: the song is converted to a 30-second WAV clip, photos to JPG,
+// the video is uploaded as it is. Files get unique names automatically, nobody has to rename anything.
+function wavFromPcm(pcm, sampleRate) {
+  const header = new DataView(new ArrayBuffer(44));
+  const w = (o, s) => { for (let i = 0; i < s.length; i++) header.setUint8(o + i, s.charCodeAt(i)); };
+  w(0, 'RIFF'); header.setUint32(4, 36 + pcm.byteLength, true); w(8, 'WAVE'); w(12, 'fmt ');
+  header.setUint32(16, 16, true); header.setUint16(20, 1, true); header.setUint16(22, 1, true);
+  header.setUint32(24, sampleRate, true); header.setUint32(28, sampleRate * 2, true);
+  header.setUint16(32, 2, true); header.setUint16(34, 16, true);
+  w(36, 'data'); header.setUint32(40, pcm.byteLength, true);
+  return new Blob([header, pcm], { type: 'audio/wav' });
+}
+
+async function makeSongClip(file, sid) {
+  try {
+    const AC = window.AudioContext || window.webkitAudioContext;
+    const ctx = new AC();
+    const ab = await file.arrayBuffer();
+    const buf = await new Promise((res, rej) => { const p = ctx.decodeAudioData(ab, res, rej); if (p && p.catch) p.catch(rej); });
+    try { ctx.close(); } catch (e) {}
+    const sr = buf.sampleRate, ch = buf.numberOfChannels;
+    const n = Math.min(buf.length, Math.floor(SONG_MAX_SECONDS * sr));
+    const mono = new Float32Array(n);
+    for (let c = 0; c < ch; c++) { const d = buf.getChannelData(c); for (let i = 0; i < n; i++) mono[i] += d[i] / ch; }
+    const outSr = Math.min(sr, 32000);
+    const outN = Math.floor(n * outSr / sr);
+    const pcm = new Int16Array(outN);
+    const fadeN = Math.min(outN, Math.floor(SONG_FADE_SECONDS * outSr));
+    for (let i = 0; i < outN; i++) {
+      const pos = i * sr / outSr, i0 = Math.floor(pos), i1 = Math.min(n - 1, i0 + 1), fr = pos - i0;
+      let s = mono[i0] * (1 - fr) + mono[i1] * fr;
+      if (i >= outN - fadeN) s *= (outN - i) / fadeN;
+      s = Math.max(-1, Math.min(1, s));
+      pcm[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
+    }
+    return { kind: 'song', name: sid + '-song.wav', blob: wavFromPcm(pcm, outSr) };
+  } catch (e) {
+    // this browser couldn't decode it: upload the original file (the player still stops it at 30 seconds)
+    return { kind: 'song', name: sid + '-song.' + fileExt(file.name, 'mp3'), blob: file };
+  }
+}
+
+async function mediaBlob(m) {
+  if (m.blob) return m.blob;
+  m.blob = await (await fetch(m.dataUrl)).blob();
+  return m.blob;
+}
+
+function githubTarget() {
+  const m = /^([^.]+)\.github\.io$/i.exec(location.hostname);
+  if (!m) return null;
+  const parts = location.pathname.split('/').filter(Boolean);
+  const dirs = location.pathname.endsWith('/') ? parts : parts.slice(0, -1);
+  if (!dirs.length) return { repo: m[1] + '/' + m[1] + '.github.io', dir: '' };
+  return { repo: m[1] + '/' + dirs[0], dir: dirs.slice(1).join('/') };
+}
+
+const toB64 = blob => new Promise((res, rej) => {
+  const r = new FileReader();
+  r.onload = () => res(String(r.result).split(',')[1]);
+  r.onerror = () => rej(new Error('could not read file'));
+  r.readAsDataURL(blob);
+});
+
 async function downloadHostedFiles() {
   const line = document.getElementById('dl-status');
-  const list = [];
-  if (SONG_CLIP && SONG_CLIP.blob) list.push([SONG_CLIP.file, SONG_CLIP.blob]);
-  if (VIDEO_CLIP && VIDEO_CLIP.blob) list.push([VIDEO_CLIP.file, VIDEO_CLIP.blob]);
   try {
-    for (const p of photoFiles) {
-      const jpg = await shrinkPhoto(p.dataUrl, 1600, 0.85);
-      list.push([p.name, await (await fetch(jpg)).blob()]);
-    }
-    for (let i = 0; i < list.length; i++) {
+    for (const m of hostedMedia) {
       const a = document.createElement('a');
-      a.href = URL.createObjectURL(list[i][1]);
-      a.download = list[i][0];
+      a.href = URL.createObjectURL(await mediaBlob(m));
+      a.download = m.name;
       document.body.appendChild(a); a.click(); a.remove();
       setTimeout(() => URL.revokeObjectURL(a.href), 10000);
       await new Promise(r => setTimeout(r, 600));
     }
-    if (line) line.textContent = '⬇️ Downloaded ' + list.length + ' file(s). If your browser asks, allow multiple downloads. Now upload them to GitHub, in the same folder as this HTML.';
+    if (line) line.textContent = '⬇️ Downloaded ' + hostedMedia.length + ' file(s). Upload them to GitHub in the same folder as this HTML.';
   } catch (e) {
     if (line) line.textContent = "Couldn't download the files. Try again.";
   }
 }
 
-async function checkHostedMedia() {
+function buildMediaPanel() {
   const box = document.getElementById('share-media-note');
-  const items = [];
-  if (SONG_CLIP && SONG_CLIP.file) items.push(['🎵 Song', [SONG_CLIP.file]]);
-  if (VIDEO_CLIP && VIDEO_CLIP.file) items.push(['🎬 Video', [VIDEO_CLIP.file]]);
-  if (photoFiles.length) items.push(['📷 Photos (needed for the QR code)', photoFiles.map(p => p.name)]);
   box.textContent = '';
-  if (!items.length) { box.hidden = true; return; }
+  if (!hostedMedia.length) { box.hidden = true; return; }
   box.hidden = false;
-  const head = document.createElement('div');
-  head.textContent = 'To play in the shared link (and show photos in the QR code), upload these files to your website (GitHub), in the same folder as this HTML, with exactly these names:';
-  box.appendChild(head);
-  const dl = document.createElement('button');
-  dl.type = 'button'; dl.className = 'btn-alt'; dl.textContent = '⬇️ Download files with the right names';
-  dl.style.marginTop = '8px';
-  dl.onclick = downloadHostedFiles;
-  box.appendChild(dl);
-  const dlStatus = document.createElement('div');
-  dlStatus.id = 'dl-status'; dlStatus.className = 'mn-line';
-  box.appendChild(dlStatus);
-  let allOk = true;
-  for (const [label, files] of items) {
-    const line = document.createElement('div');
-    line.className = 'mn-line';
-    line.textContent = label + ' ' + files.join(', ') + ' … checking';
-    box.appendChild(line);
-    const missing = [];
-    await Promise.all(files.map(async f => {
-      let found = false;
-      try { found = (await fetch(hostedUrl(f), { method: 'HEAD', cache: 'no-store' })).ok; } catch (e) { found = false; }
-      if (!found) missing.push(f);
-    }));
-    if (missing.length) allOk = false;
-    line.textContent = missing.length
-      ? label + ' ⚠️ not on your website yet: ' + missing.join(', ')
-      : label + ' ✅ found on your website';
+  const mk = (tag, text, css) => { const e = document.createElement(tag); if (text) e.textContent = text; if (css) e.style.cssText = css; box.appendChild(e); return e; };
+
+  mk('div', 'Your song, video and photos must be online so the link and the QR code can play them. Any file format is fine, the names are made automatically.');
+  const gh = githubTarget();
+  if (gh) {
+    const st = {}; try { st.t = localStorage.getItem('gh_token') || ''; } catch (e) { st.t = ''; }
+    mk('div', 'GitHub repository', 'margin-top:8px;font-size:0.75rem;opacity:.9');
+    const repo = mk('input', '', 'width:100%;margin-top:3px'); repo.type = 'text'; repo.id = 'gh-repo'; repo.value = gh.repo;
+    mk('div', 'GitHub token (one-time, stays only in this browser)', 'margin-top:8px;font-size:0.75rem;opacity:.9');
+    const tok = mk('input', '', 'width:100%;margin-top:3px'); tok.type = 'password'; tok.id = 'gh-token'; tok.value = st.t; tok.placeholder = 'github_pat_...'; tok.autocomplete = 'off';
+    const help = mk('div', '', 'margin-top:4px;font-size:0.72rem;opacity:.85');
+    help.append('Create it here: ');
+    const link = document.createElement('a');
+    link.href = 'https://github.com/settings/personal-access-tokens/new'; link.target = '_blank'; link.rel = 'noopener';
+    link.textContent = 'github.com/settings/personal-access-tokens/new'; link.style.color = '#ffe9a8';
+    help.appendChild(link);
+    help.append(' → Repository access: only select your site repo → Permissions → Contents: Read and write → Generate, then paste it above.');
+    const up = mk('button', '🚀 Upload everything to GitHub for me', 'width:100%;margin-top:8px'); up.type = 'button'; up.className = 'btn-alt'; up.onclick = uploadToGitHub;
+    mk('div', '', 'margin-top:6px;font-size:0.8rem').id = 'mn-progress';
+    const dl = mk('button', '⬇️ Or download the files and upload them yourself', 'width:100%;margin-top:8px;opacity:.85'); dl.type = 'button'; dl.className = 'btn-alt'; dl.onclick = downloadHostedFiles;
+  } else {
+    const dl = mk('button', '⬇️ Download the files', 'width:100%;margin-top:8px'); dl.type = 'button'; dl.className = 'btn-alt'; dl.onclick = downloadHostedFiles;
+    mk('div', 'Upload them to your website, in the same folder as this HTML.', 'margin-top:4px;font-size:0.75rem');
   }
+  mk('div', '', 'margin-top:6px;font-size:0.8rem').id = 'dl-status';
+  mk('div', '', 'margin-top:8px').id = 'mn-list';
+  checkHostedMedia();
+}
+
+const KIND_LABEL = { song: '🎵 Song', video: '🎬 Video', photo: '📷 Photo' };
+
+// Refreshes the ✅ / ⚠️ list. Returns true when every file is online.
+async function checkHostedMedia() {
+  const list = document.getElementById('mn-list');
+  if (!list) return false;
+  list.textContent = '';
+  const lines = hostedMedia.map(m => {
+    const d = document.createElement('div'); d.className = 'mn-line';
+    d.textContent = (KIND_LABEL[m.kind] || '📄') + ' … checking'; list.appendChild(d); return d;
+  });
+  let allOk = true;
+  await Promise.all(hostedMedia.map(async (m, i) => {
+    let found = false;
+    try { found = (await fetch(hostedUrl(m.name), { method: 'HEAD', cache: 'no-store' })).ok; } catch (e) {}
+    if (!found) allOk = false;
+    lines[i].textContent = (KIND_LABEL[m.kind] || '📄') + (found ? ' ✅ online' : ' ⚠️ not online yet');
+  }));
   if (!allOk) {
     const again = document.createElement('button');
-    again.type = 'button'; again.className = 'btn-alt'; again.textContent = '🔄 Check again';
+    again.type = 'button'; again.className = 'btn-alt'; again.textContent = '🔄 Check again'; again.style.marginTop = '6px';
     again.onclick = checkHostedMedia;
-    box.appendChild(again);
-    const tip = document.createElement('div');
-    tip.className = 'mn-line';
-    tip.textContent = 'Tip: after uploading to GitHub wait about a minute, then tap Check again. File names are case-sensitive.';
-    box.appendChild(tip);
+    list.appendChild(again);
   }
+  return allOk;
+}
+
+async function ghPut(repo, path, b64, token) {
+  const url = 'https://api.github.com/repos/' + repo + '/contents/' + path.split('/').map(encodeURIComponent).join('/');
+  const headers = { 'Authorization': 'Bearer ' + token, 'Accept': 'application/vnd.github+json', 'Content-Type': 'application/json' };
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const r = await fetch(url, { method: 'PUT', headers, body: JSON.stringify({ message: 'Add surprise media', content: b64 }) });
+    if (r.ok) return;
+    if (r.status === 409 && attempt < 2) { await new Promise(x => setTimeout(x, 1200)); continue; }
+    if (r.status === 401) throw new Error('GitHub did not accept the token. Make a new one and paste it again.');
+    if (r.status === 403 || r.status === 404) throw new Error("The token can't write to this repository. Check the repository name and that the token has Contents: Read and write.");
+    if (r.status === 422) throw new Error('GitHub refused the file (it may already exist).');
+    throw new Error('GitHub said ' + r.status);
+  }
+  throw new Error('GitHub is busy, try again in a minute.');
+}
+
+async function uploadToGitHub() {
+  const prog = document.getElementById('mn-progress');
+  const token = document.getElementById('gh-token').value.trim();
+  const repo = document.getElementById('gh-repo').value.trim();
+  const gh = githubTarget() || { dir: '' };
+  prog.style.color = '';
+  if (!/^[\w.-]+\/[\w.-]+$/.test(repo)) { prog.textContent = 'Type the repository like  username/repository-name'; return; }
+  if (!token) { prog.textContent = 'Paste your GitHub token first (steps are just above).'; return; }
+  try { localStorage.setItem('gh_token', token); } catch (e) {}
+  try {
+    for (let i = 0; i < hostedMedia.length; i++) {
+      const m = hostedMedia[i];
+      prog.textContent = '⏫ Uploading ' + (i + 1) + ' of ' + hostedMedia.length + ' (' + (KIND_LABEL[m.kind] || 'file') + ')…';
+      const blob = await mediaBlob(m);
+      if (blob.size > 70 * 1024 * 1024) throw new Error('A file is bigger than 70 MB. Please use a shorter video.');
+      await ghPut(repo, (gh.dir ? gh.dir + '/' : '') + m.name, await toB64(blob), token);
+    }
+  } catch (e) {
+    prog.textContent = '⚠️ ' + e.message;
+    return;
+  }
+  // GitHub Pages needs a moment to publish the new files: keep checking
+  for (let t = 0; t < 24; t++) {
+    prog.textContent = '✅ Uploaded! Waiting for GitHub to publish… (' + (t + 1) + ')';
+    if (await checkHostedMedia()) {
+      // everything is online: the short link is now the best one to send (small, QR-friendly)
+      lastShareUrl = lastQrUrl;
+      document.getElementById('share-link').value = lastShareUrl;
+      fillLinkPreview();
+      document.getElementById('share-status').textContent = 'Your surprise is ready! 🎉 Everything is online. Send this link or the QR code:';
+      prog.textContent = '🎉 Done! Song, video and photos are online. The link and QR code work now.';
+      return;
+    }
+    await new Promise(x => setTimeout(x, 6000));
+  }
+  prog.textContent = 'Uploaded, but GitHub is still publishing. Wait a minute and tap Check again below.';
 }
 
 // ---------- FAVORITE SONG (starts with the countdown, plays the first SONG_MAX_SECONDS seconds) ----------
@@ -2523,7 +2652,9 @@ function addReasonEntry() {
 }
 
 function handlePhotoFile(file) {
-  if (!file || !file.type.startsWith('image/') || photoTargetIndex === null) return;
+  if (!file || photoTargetIndex === null) return;
+  const looksImage = (file.type || '').startsWith('image/') || /\.(jpe?g|png|webp|gif|bmp|avif|heic|heif|tiff?|svg|ico)$/i.test(file.name || '');
+  if (!looksImage) { alert('Please choose a photo (JPG, PNG, WEBP, GIF, ...).'); return; }
   const target = photoTargetIndex;
   const reader = new FileReader();
   reader.onload = e => {
@@ -2554,6 +2685,7 @@ function handlePhotoFile(file) {
         if (last) { last.focus(); last.scrollIntoView({ block: 'center', behavior: 'smooth' }); }
       }
     };
+    img.onerror = () => alert("This browser can't open that photo format (iPhone HEIC photos sometimes don't open on Chrome). Please choose a JPG or PNG version of it.");
     img.src = e.target.result;
   };
   reader.readAsDataURL(file);

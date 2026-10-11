@@ -7,14 +7,14 @@
 <title>Happy Birthday Love</title>
 
 <!-- ===== LINK PREVIEW (WhatsApp / Telegram / Instagram) =====
-     Replace YOUR-SITE.com (only in the 2 image lines below) with your real website address (the same place you upload this HTML).
+     Upload preview.jpg to GitHub in the same folder as this HTML (so it opens at https://jefrin2008.github.io/preview.jpg).
      (og:url removed on purpose: a wrong og:url makes WhatsApp show the wrong link/preview.)
      Upload preview.jpg next to this HTML file. WhatsApp needs the FULL https:// address for the image. -->
 <meta property="og:site_name" content="Birthday Surprise">
 <meta property="og:type" content="website">
 <meta property="og:title" content="🎂 A Birthday Surprise is waiting for you 💖">
 <meta property="og:description" content="Someone made something special just for you. Tap to open it ✨">
-<meta property="og:image" content="https://YOUR-SITE.com/preview.jpg">
+<meta property="og:image" content="https://jefrin2008.github.io/preview.jpg">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
 <meta property="og:image:type" content="image/jpeg">
@@ -22,7 +22,7 @@
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="🎂 A Birthday Surprise is waiting for you 💖">
 <meta name="twitter:description" content="Someone made something special just for you. Tap to open it ✨">
-<meta name="twitter:image" content="https://YOUR-SITE.com/preview.jpg">
+<meta name="twitter:image" content="https://jefrin2008.github.io/preview.jpg">
 <meta name="description" content="Someone made something special just for you. Tap to open it ✨">
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -581,7 +581,20 @@
   .share-preview-label { margin-top: 10px; font-size: 0.72rem; color: #ffd1f7; text-align: center; letter-spacing: 0.5px; }
   .share-qr-btn { width: 100%; margin-top: 8px; padding: 9px 10px; }
   .share-qr { margin-top: 10px; text-align: center; }
-  .share-qr canvas { width: 200px; height: 200px; border-radius: 12px; background: #fff; image-rendering: pixelated; }
+  .share-qr canvas { width: min(270px, 100%); height: auto; aspect-ratio: 1; border-radius: 12px; background: #fff; image-rendering: pixelated; }
+  .qr-actions { display: flex; gap: 8px; margin-top: 10px; }
+  .qr-actions[hidden], .qr-msg[hidden], .field-hint[hidden] { display: none; }
+  .qr-actions button { flex: 1; padding: 9px 8px; }
+  .qr-msg { margin-top: 8px; font-size: 0.85rem; line-height: 1.4; opacity: 0.95; }
+  .media-note { margin-top: 10px; padding: 10px 12px; border-radius: 12px; background: rgba(255,255,255,0.12); font-size: 0.82rem; line-height: 1.45; text-align: left; }
+  .media-note[hidden] { display: none; }
+  .media-note .mn-line { margin: 4px 0; word-break: break-word; }
+  .media-note button { margin-top: 6px; padding: 6px 10px; font-size: 0.8rem; }
+  #tap-gate { position: fixed; inset: 0; z-index: 9999; display: flex; align-items: center; justify-content: center; padding: 24px; text-align: center; color: #fff; background: radial-gradient(circle at 50% 30%, #8c106a 0%, #2b0838 75%); }
+  #tap-gate[hidden] { display: none; }
+  .tap-card h2 { margin: 8px 0 6px; font-size: 1.5rem; }
+  .tap-card p { margin: 0 0 18px; opacity: 0.9; }
+  .tap-emoji { font-size: 3.2rem; }
   .share-loading { position: fixed; inset: 0; z-index: 60; display: flex; align-items: center; justify-content: center; padding: 24px; text-align: center; color: #fff; font-size: 1.05rem; line-height: 1.5; background: rgba(43, 8, 56, 0.55); }
   .share-loading.error { color: var(--gold); }
   .setup-btn-group .btn-alt {
@@ -732,6 +745,15 @@
 
   <div class="share-loading" id="share-loading" hidden><div id="share-loading-text">Opening your surprise 💌...</div></div>
 
+  <div id="tap-gate" hidden>
+    <div class="tap-card">
+      <div class="tap-emoji">🎁</div>
+      <h2>A surprise is waiting for you</h2>
+      <p>Tap to open it 🎵 (keep your sound on)</p>
+      <button class="btn-yes" type="button" onclick="openFromGate()">Open my surprise 💖</button>
+    </div>
+  </div>
+
   <div id="screen0" class="screen active">
     <div class="card setup-card">
       <h1>Make it yours 💌</h1>
@@ -742,7 +764,7 @@
         <input type="file" id="song-file" accept="audio/*" hidden>
         <div class="song-empty" id="song-empty">
           <button type="button" class="song-add" onclick="document.getElementById('song-file').click()">＋ Add favorite song</button>
-          <div class="field-hint">The full song plays automatically from the start of the countdown till the very end.</div>
+          <div class="field-hint">The full song plays automatically from the start of the countdown till the very end. To make it play in the shared link, upload the same file to your website (GitHub) next to this HTML.</div>
         </div>
         <div class="song-status" id="song-status" hidden>
           <div class="song-icon" id="song-icon">🎵</div>
@@ -762,7 +784,7 @@
         <input type="file" id="video-file" accept="video/*,.mp4,.m4v,.mov,.webm,.mkv,.avi,.3gp,.ogv" hidden>
         <div class="song-empty" id="video-empty">
           <button type="button" class="song-add" onclick="document.getElementById('video-file').click()">＋ Add video clip</button>
-          <div class="field-hint">Plays right after the photos &amp; notes, with your song. MP4 works everywhere; MOV, WebM, M4V work if your browser supports them. (Video can't travel inside the WhatsApp link.)</div>
+          <div class="field-hint">Plays right after the photos &amp; notes, with your song. MP4 works everywhere; MOV, WebM, M4V work if your browser supports them. (For the shared link, upload the same video file to your website (GitHub) next to this HTML.)</div>
         </div>
         <div class="song-status" id="video-status" hidden>
           <div class="song-icon" id="video-icon">🎬</div>
@@ -839,10 +861,16 @@
             <button class="btn-alt" type="button" onclick="copyShareLink()">📋 Copy link</button>
             <button class="btn-yes" type="button" onclick="shareLinkOnWhatsApp()">💬 WhatsApp</button>
           </div>
+          <div class="media-note" id="share-media-note" hidden></div>
           <button class="btn-alt share-qr-btn" type="button" id="qr-toggle" onclick="toggleQR()">▦ Show QR code</button>
           <div class="share-qr" id="share-qr" hidden>
             <canvas id="qr-canvas"></canvas>
-            <div class="field-hint">Scan with a phone camera to open the surprise</div>
+            <div class="qr-msg" id="qr-msg" hidden></div>
+            <div class="qr-actions" id="qr-actions">
+              <button class="btn-alt" type="button" onclick="shareQRImage()">📤 Share QR image</button>
+              <button class="btn-alt" type="button" onclick="saveQRImage()">⬇️ Save image</button>
+            </div>
+            <div class="field-hint" id="qr-hint">Scan with a phone camera to open the surprise</div>
           </div>
         </div>
       </div>
@@ -1071,18 +1099,26 @@
 const SHARE_DB_URL = '';
 const shareDbBase = () => SHARE_DB_URL.trim().replace(/\/+$/, '');
 
-// ---------- TINY QR CODE ENCODER (byte mode, error-correction level M, versions 1-10) ----------
+// ---------- TINY QR CODE ENCODER (byte mode, error-correction level M or L, versions 1-40) ----------
 // Used only to show the "scan to open" QR for the share link. No external library needed.
 const QR = (() => {
-  const EC_PER_BLOCK = [10, 16, 26, 18, 24, 16, 18, 22, 22, 26];   // versions 1..10, level M
-  const NUM_BLOCKS   = [1, 1, 1, 2, 2, 4, 4, 4, 5, 5];
+  // index = version (index 0 unused)
+  const ECC_PER_BLOCK = {
+    L: [-1, 7, 10, 15, 20, 26, 18, 20, 24, 30, 18, 20, 24, 26, 30, 22, 24, 28, 30, 28, 28, 28, 28, 30, 30, 26, 28, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30],
+    M: [-1, 10, 16, 26, 18, 24, 16, 18, 22, 22, 26, 30, 22, 22, 24, 24, 28, 28, 26, 26, 26, 26, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28]
+  };
+  const NUM_BLOCKS_TBL = {
+    L: [-1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 4, 4, 4, 4, 4, 6, 6, 6, 6, 7, 8, 8, 9, 9, 10, 12, 12, 12, 13, 14, 15, 16, 17, 18, 19, 19, 20, 21, 22, 24, 25],
+    M: [-1, 1, 1, 1, 2, 2, 4, 4, 4, 5, 5, 5, 8, 9, 9, 10, 10, 11, 13, 14, 16, 17, 17, 18, 20, 21, 23, 25, 26, 28, 29, 31, 33, 35, 37, 38, 40, 43, 45, 47, 49]
+  };
+  const LEVEL_BITS = { L: 1, M: 0 };
 
   const rawModules = v => {
     let r = (16 * v + 128) * v + 64;
     if (v >= 2) { const n = Math.floor(v / 7) + 2; r -= (25 * n - 10) * n - 55; if (v >= 7) r -= 36; }
     return r;
   };
-  const dataCodewords = v => Math.floor(rawModules(v) / 8) - EC_PER_BLOCK[v - 1] * NUM_BLOCKS[v - 1];
+  const dataCodewords = (v, lv) => Math.floor(rawModules(v) / 8) - ECC_PER_BLOCK[lv][v] * NUM_BLOCKS_TBL[lv][v];
 
   const gfMul = (x, y) => { let z = 0; for (let i = 7; i >= 0; i--) { z = (z << 1) ^ ((z >>> 7) * 0x11D); z ^= ((y >>> i) & 1) * x; } return z; };
   const rsDivisor = deg => {
@@ -1102,10 +1138,13 @@ const QR = (() => {
 
   function encode(text) {
     const bytes = Array.from(new TextEncoder().encode(text));
-    let ver = 0;
-    for (let v = 1; v <= 10; v++) {
-      const ccBits = v < 10 ? 8 : 16;
-      if (4 + ccBits + 8 * bytes.length <= dataCodewords(v) * 8) { ver = v; break; }
+    let ver = 0, lvl = 'M';
+    for (const lv of ['M', 'L']) {
+      for (let v = 1; v <= 40 && !ver; v++) {
+        const ccBits = v < 10 ? 8 : 16;
+        if (4 + ccBits + 8 * bytes.length <= dataCodewords(v, lv) * 8) { ver = v; lvl = lv; }
+      }
+      if (ver) break;
     }
     if (!ver) throw new Error('QR: text too long');
     const size = ver * 4 + 17;
@@ -1114,7 +1153,7 @@ const QR = (() => {
     const bits = [];
     const push = (val, len) => { for (let i = len - 1; i >= 0; i--) bits.push((val >>> i) & 1); };
     push(0b0100, 4); push(bytes.length, ver < 10 ? 8 : 16); bytes.forEach(b => push(b, 8));
-    const cap = dataCodewords(ver) * 8;
+    const cap = dataCodewords(ver, lvl) * 8;
     push(0, Math.min(4, cap - bits.length));
     push(0, (8 - bits.length % 8) % 8);
     for (let pad = 0xEC; bits.length < cap; pad ^= 0xEC ^ 0x11) push(pad, 8);
@@ -1122,7 +1161,7 @@ const QR = (() => {
     for (let i = 0; i < bits.length; i += 8) { let b = 0; for (let j = 0; j < 8; j++) b = (b << 1) | bits[i + j]; data.push(b); }
 
     // --- error correction + interleave ---
-    const nb = NUM_BLOCKS[ver - 1], eccLen = EC_PER_BLOCK[ver - 1];
+    const nb = NUM_BLOCKS_TBL[lvl][ver], eccLen = ECC_PER_BLOCK[lvl][ver];
     const raw = Math.floor(rawModules(ver) / 8);
     const shortBlocks = nb - raw % nb, shortLen = Math.floor(raw / nb);
     const div = rsDivisor(eccLen), blocks = [];
@@ -1151,7 +1190,7 @@ const QR = (() => {
     finder(3, 3); finder(size - 4, 3); finder(3, size - 4);
     if (ver >= 2) {
       const n = Math.floor(ver / 7) + 2;
-      const step = Math.ceil((ver * 4 + 4) / (n * 2 - 2)) * 2;
+      const step = ver === 32 ? 26 : Math.ceil((ver * 4 + 4) / (n * 2 - 2)) * 2;
       const pos = [6];
       for (let p = size - 7; pos.length < n; p -= step) pos.splice(1, 0, p);
       for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) {
@@ -1161,7 +1200,7 @@ const QR = (() => {
       }
     }
     const drawFormat = mask => {
-      const d = (0 << 3) | mask;            // level M indicator = 0
+      const d = (LEVEL_BITS[lvl] << 3) | mask;
       let rem = d; for (let i = 0; i < 10; i++) rem = (rem << 1) ^ ((rem >>> 9) * 0x537);
       const f = ((d << 10) | rem) ^ 0x5412;
       for (let i = 0; i <= 5; i++) setFn(8, i, bit(f, i));
@@ -1236,8 +1275,10 @@ const QR = (() => {
     return mod;
   }
 
-  function draw(canvas, text, scale = 6, border = 4) {
-    const m = encode(text), n = m.length, px = (n + border * 2) * scale;
+  function draw(canvas, text, target = 520, border = 4) {
+    const m = encode(text), n = m.length;
+    const scale = Math.max(3, Math.floor(target / (n + border * 2)));
+    const px = (n + border * 2) * scale;
     canvas.width = canvas.height = px;
     const ctx = canvas.getContext('2d');
     ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, px, px);
@@ -1467,6 +1508,8 @@ async function createShareLink() {
   status.textContent = 'Making your link... 💌';
   try {
     const data = collectShareData();
+    if (SONG_CLIP && SONG_CLIP.file) data.a = SONG_CLIP.file;
+    if (VIDEO_CLIP && VIDEO_CLIP.file) data.v = VIDEO_CLIP.file;
     if (SHARE_DB_URL.trim()) {
       // Optional short-link mode (Firebase)
       const body = JSON.stringify(JSON.stringify(data));
@@ -1478,10 +1521,13 @@ async function createShareLink() {
     } else {
       // No database needed: everything travels inside the link itself (after the #).
       let enc = '';
+      const slim = Object.assign({}, data);
+      delete slim.m; delete slim.os; delete slim.fst;     // the receiver already has these built-in texts
+      if (!Object.keys(slim.p || {}).length) delete slim.p;
       for (const [max, q] of [[360, 0.5], [280, 0.42], [200, 0.35]]) {
         const small = {};
         for (const k of Object.keys(data.p || {})) small[k] = await shrinkPhoto(data.p[k], max, q);
-        enc = await packData(Object.assign({}, data, { p: small }));
+        enc = await packData(Object.assign({}, slim, Object.keys(small).length ? { p: small } : {}));
         if (enc.length < 30000) break;
       }
       if (enc.length > 60000) throw new Error('too many photos, remove a few');
@@ -1491,8 +1537,9 @@ async function createShareLink() {
     fillLinkPreview();
     document.getElementById('share-qr').hidden = true;
     document.getElementById('qr-toggle').textContent = '▦ Show QR code';
-    status.textContent = lastShareUrl.length > 6000 ? 'Your surprise is ready! 🎉 The link is long (because of the photos), so tap 📋 Copy link and paste it in WhatsApp.' : 'Your surprise is ready! 🎉 Send this link:';
+    status.textContent = lastShareUrl.length > 6000 ? 'Your surprise is ready! 🎉 The link is long (because of the photos). Tap 💬 WhatsApp and pick WhatsApp from the list, or tap 📋 Copy link and paste it in the chat.' : 'Your surprise is ready! 🎉 Send this link:';
     done.hidden = false;
+    checkHostedMedia();
   } catch (e) {
     status.classList.add('error');
     status.textContent = "Couldn't upload (" + e.message + "). Check your internet and try again.";
@@ -1503,25 +1550,44 @@ async function createShareLink() {
 
 function copyShareLink(doneMsg) {
   const input = document.getElementById('share-link');
-  const ok = () => { const s = document.getElementById('share-status'); s.textContent = (typeof doneMsg === 'string' && doneMsg) || 'Link copied ✅'; };
-  if (navigator.clipboard && navigator.clipboard.writeText) {
-    navigator.clipboard.writeText(lastShareUrl).then(ok, () => { input.select(); document.execCommand('copy'); ok(); });
+  const st = document.getElementById('share-status');
+  const ok = () => { st.classList.remove('error'); st.textContent = (typeof doneMsg === 'string' && doneMsg) || 'Link copied ✅'; };
+  const legacy = () => {
+    try {
+      input.focus(); input.select(); input.setSelectionRange(0, input.value.length);
+      const done = document.execCommand('copy');
+      input.blur();
+      if (done) { ok(); return; }
+    } catch (e) {}
+    st.textContent = 'Could not copy automatically. Tap and hold the link box, choose Select all, then Copy 👆';
+  };
+  if (navigator.clipboard && navigator.clipboard.writeText && window.isSecureContext) {
+    navigator.clipboard.writeText(lastShareUrl).then(ok, legacy);
   } else {
-    input.select(); document.execCommand('copy'); ok();
+    legacy();
   }
 }
 
 function shareLinkOnWhatsApp() {
   const name = document.getElementById('input-name').value.trim() || RECIPIENT_NAME;
   // Link goes on its own last line so WhatsApp shows the preview card under the message.
-  if (lastShareUrl.length > 6000) {
-    // Very long link: too big for a wa.me address, so copy it and let them paste it in the chat.
-    copyShareLink('Link copied ✅ Now open WhatsApp, choose the chat and paste it 👇');
-    window.open('https://wa.me/?text=' + encodeURIComponent(`I made a little surprise for you, ${name} 💕\nOpen it here 👇\n`), '_blank');
+  const intro = `I made a little surprise for you, ${name} 💕\nOpen it here 👇`;
+  const message = `${intro}\n${lastShareUrl}`;
+  if (lastShareUrl.length <= 6000) {
+    window.open('https://wa.me/?text=' + encodeURIComponent(message), '_blank');
     return;
   }
-  const message = `I made a little surprise for you, ${name} 💕\nOpen it here 👇\n${lastShareUrl}`;
-  window.open('https://wa.me/?text=' + encodeURIComponent(message), '_blank');
+  // Very long link (photos): too big for a wa.me address.
+  const fallback = () => {
+    copyShareLink('Link copied ✅ Now open WhatsApp, choose the chat and paste it 👇');
+    window.open('https://wa.me/?text=' + encodeURIComponent(intro + '\n'), '_blank');
+  };
+  if (navigator.share && /Android|iPhone|iPad|iPod/i.test(navigator.userAgent)) {
+    // Phone share sheet: carries the whole link, just pick WhatsApp from the list.
+    navigator.share({ text: message }).catch(e => { if (!e || e.name !== 'AbortError') fallback(); });
+  } else {
+    fallback();
+  }
 }
 
 function openShareLink() {
@@ -1540,12 +1606,94 @@ function toggleQR() {
   const box = document.getElementById('share-qr');
   const btn = document.getElementById('qr-toggle');
   if (!box.hidden) { box.hidden = true; btn.textContent = '▦ Show QR code'; return; }
+  const canvas = document.getElementById('qr-canvas');
+  const msg = document.getElementById('qr-msg');
+  const actions = document.getElementById('qr-actions');
+  const hint = document.getElementById('qr-hint');
   try {
-    QR.draw(document.getElementById('qr-canvas'), lastShareUrl);
-    box.hidden = false;
-    btn.textContent = '▦ Hide QR code';
+    QR.draw(canvas, lastShareUrl);
+    canvas.hidden = false; actions.hidden = false; hint.hidden = false; msg.hidden = true;
   } catch (e) {
-    alert("Couldn't make the QR code for this link.");
+    canvas.hidden = true; actions.hidden = true; hint.hidden = true;
+    msg.hidden = false;
+    msg.textContent = 'This link is too long for a QR code because it has photos 📷 (a QR code can only hold a small link). Use 💬 WhatsApp or 📋 Copy link to send it. A QR code works for surprises without photos.';
+  }
+  box.hidden = false;
+  btn.textContent = '▦ Hide QR code';
+}
+
+function qrBlob() {
+  const c = document.createElement('canvas');
+  QR.draw(c, lastShareUrl, 900, 4);
+  return new Promise(res => c.toBlob(res, 'image/png'));
+}
+
+async function saveQRImage() {
+  const hint = document.getElementById('qr-hint');
+  try {
+    const blob = await qrBlob();
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'surprise-qr.png';
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+    hint.textContent = 'QR image saved ✅ Check your Downloads / Gallery';
+  } catch (e) {
+    hint.textContent = "Couldn't save the QR image. Try a screenshot of the QR code instead.";
+  }
+}
+
+async function shareQRImage() {
+  try {
+    const blob = await qrBlob();
+    const file = new File([blob], 'surprise-qr.png', { type: 'image/png' });
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      await navigator.share({ files: [file], title: 'A surprise for you 💖', text: 'Scan this QR code to open your surprise 💖' });
+      return;
+    }
+  } catch (e) {
+    if (e && e.name === 'AbortError') return;   // they closed the share sheet
+  }
+  saveQRImage();   // this device can't share files directly: save the image instead
+}
+
+// Song / video are NOT inside the link: the same file must be uploaded next to this HTML on the website.
+async function checkHostedMedia() {
+  const box = document.getElementById('share-media-note');
+  const items = [];
+  if (SONG_CLIP && SONG_CLIP.file) items.push(['🎵 Song', SONG_CLIP.file]);
+  if (VIDEO_CLIP && VIDEO_CLIP.file) items.push(['🎬 Video', VIDEO_CLIP.file]);
+  box.textContent = '';
+  if (!items.length) { box.hidden = true; return; }
+  box.hidden = false;
+  const head = document.createElement('div');
+  head.textContent = 'To play in the shared link, upload your file(s) to your website (GitHub), in the same folder as this HTML, with exactly the same name:';
+  box.appendChild(head);
+  let allOk = true;
+  for (const [label, file] of items) {
+    const line = document.createElement('div');
+    line.className = 'mn-line';
+    line.textContent = label + ' "' + file + '" … checking';
+    box.appendChild(line);
+    let found = false;
+    try {
+      const r = await fetch(hostedUrl(file), { method: 'HEAD', cache: 'no-store' });
+      found = r.ok;
+    } catch (e) { found = false; }
+    if (!found) allOk = false;
+    line.textContent = found
+      ? label + ' "' + file + '" ✅ found on your website'
+      : label + ' "' + file + '" ⚠️ not on your website yet. Upload it with this exact name.';
+  }
+  if (!allOk) {
+    const again = document.createElement('button');
+    again.type = 'button'; again.className = 'btn-alt'; again.textContent = '🔄 Check again';
+    again.onclick = checkHostedMedia;
+    box.appendChild(again);
+    const tip = document.createElement('div');
+    tip.className = 'mn-line';
+    tip.textContent = 'Tip: use a simple file name like song.mp3 (no spaces). It is case-sensitive.';
+    box.appendChild(tip);
   }
 }
 
@@ -1598,7 +1746,7 @@ function handleSongFile(file) {
   a.onloadedmetadata = () => {
     if (token !== songLoadToken) { URL.revokeObjectURL(url); return; }
     songAudio = a;
-    SONG_CLIP = { url, name, duration: a.duration };
+    SONG_CLIP = { url, name, duration: a.duration, file: file.name };
     const len = isFinite(a.duration) ? ` · ${fmtTime(a.duration)}` : '';
     setSongUI('ready', name, `Full song${len} · plays from the countdown to the end`);
   };
@@ -1728,7 +1876,7 @@ function handleVideoFile(file) {
     settled = true;
     clearTimeout(timer);
     if (token !== videoLoadToken) { try { URL.revokeObjectURL(url); } catch (e) {} return; }
-    VIDEO_CLIP = { url, name };
+    VIDEO_CLIP = { url, name, file: file.name };
     const dur = isFinite(probe.duration) ? fmtTime(probe.duration) + ' · ' : '';
     setVideoUI('ready', name, dur + fmtBytes(file.size));
   };
@@ -1883,6 +2031,32 @@ function applySharedData(data) {
   if (Array.isArray(data.m) && data.m.length) messages = data.m;
   reasons = Array.isArray(data.r) ? data.r : [];
   USER_REASON_IMAGES = (data.p && typeof data.p === 'object') ? data.p : {};
+  // Song / video: they can't travel inside a link, so the link carries the FILE NAME and the file
+  // is loaded from the same website folder (upload it next to this HTML).
+  const okName = n => typeof n === 'string' && n.length > 0 && n.length < 200 && !/[\\/]/.test(n);
+  try {
+    if (okName(data.a)) {
+      const url = hostedUrl(data.a);
+      const a = new Audio(); a.preload = 'auto'; a.src = url;
+      songAudio = a;
+      SONG_CLIP = { url, name: data.a, file: data.a, hosted: true };
+    }
+    if (okName(data.v)) VIDEO_CLIP = { url: hostedUrl(data.v), name: data.v, file: data.v, hosted: true };
+  } catch (e) { /* ignore a bad file name */ }
+}
+
+// Same-folder URL of an uploaded song / video file (one path segment only, same website only).
+function hostedUrl(file) {
+  const u = new URL(encodeURIComponent(file), location.href.split('#')[0].split('?')[0]);
+  if (u.origin !== location.origin) throw new Error('bad file');
+  return u.href;
+}
+
+// Phones/browsers only allow sound after a tap, so a shared surprise with a song starts from a tap.
+function showTapGate() { document.getElementById('tap-gate').hidden = false; }
+function openFromGate() {
+  document.getElementById('tap-gate').hidden = true;
+  startSurpriseView();   // runs inside the tap, so the song is allowed to play
 }
 
 async function loadSharedSurprise(id, inline) {
@@ -1904,7 +2078,7 @@ async function loadSharedSurprise(id, inline) {
       applySharedData(JSON.parse(raw));
     }
     box.hidden = true;
-    startSurpriseView();
+    if (SONG_CLIP || VIDEO_CLIP) showTapGate(); else startSurpriseView();
   } catch (e) {
     box.classList.add('error');
     msg.textContent = inline

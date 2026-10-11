@@ -764,7 +764,7 @@
         <input type="file" id="song-file" accept="audio/*" hidden>
         <div class="song-empty" id="song-empty">
           <button type="button" class="song-add" onclick="document.getElementById('song-file').click()">＋ Add favorite song</button>
-          <div class="field-hint">The full song plays automatically from the start of the countdown till the very end. To make it play in the shared link, upload the same file to your website (GitHub) next to this HTML.</div>
+          <div class="field-hint">The first 30 seconds of the song play automatically from the start of the countdown (with a soft fade-out). To make it play in the shared link, tap ⬇️ Download after you create the link and upload the file to your website (GitHub) next to this HTML.</div>
         </div>
         <div class="song-status" id="song-status" hidden>
           <div class="song-icon" id="song-icon">🎵</div>
@@ -784,7 +784,7 @@
         <input type="file" id="video-file" accept="video/*,.mp4,.m4v,.mov,.webm,.mkv,.avi,.3gp,.ogv" hidden>
         <div class="song-empty" id="video-empty">
           <button type="button" class="song-add" onclick="document.getElementById('video-file').click()">＋ Add video clip</button>
-          <div class="field-hint">Plays right after the photos &amp; notes, with your song. MP4 works everywhere; MOV, WebM, M4V work if your browser supports them. (For the shared link, upload the same video file to your website (GitHub) next to this HTML.)</div>
+          <div class="field-hint">Plays right after the photos &amp; notes, with your song. MP4 works everywhere; MOV, WebM, M4V work if your browser supports them. (For the shared link, upload the video file to your website (GitHub) next to this HTML. A ⬇️ Download button with the right file name appears after you create the link.)</div>
         </div>
         <div class="song-status" id="video-status" hidden>
           <div class="song-icon" id="video-icon">🎬</div>
@@ -1486,6 +1486,8 @@ function shrinkPhoto(dataUrl, max, q) {
 }
 
 let lastShareUrl = '';
+let lastQrUrl = '';        // short link for the QR code (photos are website files instead of being inside the link)
+let photoFiles = [];       // [{ name, dataUrl }] photos to upload next to the HTML for the short link
 
 async function createShareLink() {
   const err = validateReasonEntries();
@@ -1518,6 +1520,7 @@ async function createShareLink() {
       const res = await fetch(shareDbBase() + '/surprises/' + id + '.json', { method: 'PUT', body });
       if (!res.ok) throw new Error('server said ' + res.status);
       lastShareUrl = shareBase() + '?s=' + id;
+      lastQrUrl = lastShareUrl; photoFiles = [];
     } else {
       // No database needed: everything travels inside the link itself (after the #).
       let enc = '';
@@ -1532,6 +1535,19 @@ async function createShareLink() {
       }
       if (enc.length > 60000) throw new Error('too many photos, remove a few');
       lastShareUrl = shareBase() + '#d=' + enc;
+
+      // Short link for the QR code: the photos are NOT inside it, only their file names (photo-1.jpg ...).
+      photoFiles = [];
+      const names = {};
+      for (const k of Object.keys(data.p || {})) {
+        const name = 'photo-' + (Number(k) + 1) + '.jpg';
+        names[k] = name;
+        photoFiles.push({ name, dataUrl: data.p[k] });
+      }
+      const compact = Object.assign({}, slim);
+      delete compact.p;
+      if (Object.keys(names).length) compact.p = names;
+      lastQrUrl = shareBase() + '#d=' + await packData(compact);
     }
     document.getElementById('share-link').value = lastShareUrl;
     fillLinkPreview();
@@ -1611,12 +1627,15 @@ function toggleQR() {
   const actions = document.getElementById('qr-actions');
   const hint = document.getElementById('qr-hint');
   try {
-    QR.draw(canvas, lastShareUrl);
+    QR.draw(canvas, lastQrUrl || lastShareUrl);
     canvas.hidden = false; actions.hidden = false; hint.hidden = false; msg.hidden = true;
+    hint.textContent = photoFiles.length
+      ? 'Scan with a phone camera. For the QR to show your photos 📷, upload the photo files (see the list above) to GitHub first.'
+      : 'Scan with a phone camera to open the surprise';
   } catch (e) {
     canvas.hidden = true; actions.hidden = true; hint.hidden = true;
     msg.hidden = false;
-    msg.textContent = 'This link is too long for a QR code because it has photos 📷 (a QR code can only hold a small link). Use 💬 WhatsApp or 📋 Copy link to send it. A QR code works for surprises without photos.';
+    msg.textContent = 'This surprise has too much text for a QR code. Use 💬 WhatsApp or 📋 Copy link to send it.';
   }
   box.hidden = false;
   btn.textContent = '▦ Hide QR code';
@@ -1624,7 +1643,7 @@ function toggleQR() {
 
 function qrBlob() {
   const c = document.createElement('canvas');
-  QR.draw(c, lastShareUrl, 900, 4);
+  QR.draw(c, lastQrUrl || lastShareUrl, 900, 4);
   return new Promise(res => c.toBlob(res, 'image/png'));
 }
 
@@ -1657,33 +1676,68 @@ async function shareQRImage() {
   saveQRImage();   // this device can't share files directly: save the image instead
 }
 
-// Song / video are NOT inside the link: the same file must be uploaded next to this HTML on the website.
+// Song / video (and the photos used by the QR short link) are NOT inside the link:
+// the same files must be uploaded next to this HTML on the website. We give them simple names and a Download button.
+async function downloadHostedFiles() {
+  const line = document.getElementById('dl-status');
+  const list = [];
+  if (SONG_CLIP && SONG_CLIP.blob) list.push([SONG_CLIP.file, SONG_CLIP.blob]);
+  if (VIDEO_CLIP && VIDEO_CLIP.blob) list.push([VIDEO_CLIP.file, VIDEO_CLIP.blob]);
+  try {
+    for (const p of photoFiles) {
+      const jpg = await shrinkPhoto(p.dataUrl, 1600, 0.85);
+      list.push([p.name, await (await fetch(jpg)).blob()]);
+    }
+    for (let i = 0; i < list.length; i++) {
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(list[i][1]);
+      a.download = list[i][0];
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+      await new Promise(r => setTimeout(r, 600));
+    }
+    if (line) line.textContent = '⬇️ Downloaded ' + list.length + ' file(s). If your browser asks, allow multiple downloads. Now upload them to GitHub, in the same folder as this HTML.';
+  } catch (e) {
+    if (line) line.textContent = "Couldn't download the files. Try again.";
+  }
+}
+
 async function checkHostedMedia() {
   const box = document.getElementById('share-media-note');
   const items = [];
-  if (SONG_CLIP && SONG_CLIP.file) items.push(['🎵 Song', SONG_CLIP.file]);
-  if (VIDEO_CLIP && VIDEO_CLIP.file) items.push(['🎬 Video', VIDEO_CLIP.file]);
+  if (SONG_CLIP && SONG_CLIP.file) items.push(['🎵 Song', [SONG_CLIP.file]]);
+  if (VIDEO_CLIP && VIDEO_CLIP.file) items.push(['🎬 Video', [VIDEO_CLIP.file]]);
+  if (photoFiles.length) items.push(['📷 Photos (needed for the QR code)', photoFiles.map(p => p.name)]);
   box.textContent = '';
   if (!items.length) { box.hidden = true; return; }
   box.hidden = false;
   const head = document.createElement('div');
-  head.textContent = 'To play in the shared link, upload your file(s) to your website (GitHub), in the same folder as this HTML, with exactly the same name:';
+  head.textContent = 'To play in the shared link (and show photos in the QR code), upload these files to your website (GitHub), in the same folder as this HTML, with exactly these names:';
   box.appendChild(head);
+  const dl = document.createElement('button');
+  dl.type = 'button'; dl.className = 'btn-alt'; dl.textContent = '⬇️ Download files with the right names';
+  dl.style.marginTop = '8px';
+  dl.onclick = downloadHostedFiles;
+  box.appendChild(dl);
+  const dlStatus = document.createElement('div');
+  dlStatus.id = 'dl-status'; dlStatus.className = 'mn-line';
+  box.appendChild(dlStatus);
   let allOk = true;
-  for (const [label, file] of items) {
+  for (const [label, files] of items) {
     const line = document.createElement('div');
     line.className = 'mn-line';
-    line.textContent = label + ' "' + file + '" … checking';
+    line.textContent = label + ' ' + files.join(', ') + ' … checking';
     box.appendChild(line);
-    let found = false;
-    try {
-      const r = await fetch(hostedUrl(file), { method: 'HEAD', cache: 'no-store' });
-      found = r.ok;
-    } catch (e) { found = false; }
-    if (!found) allOk = false;
-    line.textContent = found
-      ? label + ' "' + file + '" ✅ found on your website'
-      : label + ' "' + file + '" ⚠️ not on your website yet. Upload it with this exact name.';
+    const missing = [];
+    await Promise.all(files.map(async f => {
+      let found = false;
+      try { found = (await fetch(hostedUrl(f), { method: 'HEAD', cache: 'no-store' })).ok; } catch (e) { found = false; }
+      if (!found) missing.push(f);
+    }));
+    if (missing.length) allOk = false;
+    line.textContent = missing.length
+      ? label + ' ⚠️ not on your website yet: ' + missing.join(', ')
+      : label + ' ✅ found on your website';
   }
   if (!allOk) {
     const again = document.createElement('button');
@@ -1692,17 +1746,48 @@ async function checkHostedMedia() {
     box.appendChild(again);
     const tip = document.createElement('div');
     tip.className = 'mn-line';
-    tip.textContent = 'Tip: use a simple file name like song.mp3 (no spaces). It is case-sensitive.';
+    tip.textContent = 'Tip: after uploading to GitHub wait about a minute, then tap Check again. File names are case-sensitive.';
     box.appendChild(tip);
   }
 }
 
-// ---------- FAVORITE SONG (full song: starts with the countdown, plays to the very end) ----------
+// ---------- FAVORITE SONG (starts with the countdown, plays the first SONG_MAX_SECONDS seconds) ----------
 let SONG_CLIP = null;          // { url, name, duration }
 let songAudio = null;
 let songLoadToken = 0;
 
 const fmtTime = t => `${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, '0')}`;
+
+// The song plays only this many seconds (then fades out). Change this number if you ever want it longer.
+const SONG_MAX_SECONDS = 30;
+const SONG_FADE_SECONDS = 2;
+
+// Simple file names for the website (no spaces / brackets, so nothing can go wrong on GitHub).
+const fileExt = (n, dflt) => { const m = /\.([A-Za-z0-9]{1,5})$/.exec(n || ''); return m ? m[1].toLowerCase() : dflt; };
+const hostedSongName = n => 'song.' + fileExt(n, 'mp3');
+const hostedVideoName = n => 'video.' + fileExt(n, 'mp4');
+
+function songFinished() { return !!(songAudio && (songAudio.ended || songAudio._cut)); }
+
+// Stops the song after SONG_MAX_SECONDS with a short fade-out.
+function wireSongLimit(a) {
+  a.addEventListener('timeupdate', () => {
+    if (a._cut) return;
+    const left = SONG_MAX_SECONDS - a.currentTime;
+    if (left <= 0) {
+      a._cut = true;
+      a.pause();
+      a.volume = 1;
+      // if the video screen was waiting on the song for its sound, give the video its own sound now
+      try {
+        const v = document.getElementById('memory-video');
+        if (v && document.getElementById('screen4c').classList.contains('active') && v.muted) { v.muted = false; updateVideoSoundBtn(); }
+      } catch (e) {}
+    } else if (left < SONG_FADE_SECONDS) {
+      a.volume = Math.max(0, left / SONG_FADE_SECONDS);
+    }
+  });
+}
 
 function setSongUI(state, name, detail) {
   const box = document.getElementById('song-box');
@@ -1743,12 +1828,13 @@ function handleSongFile(file) {
   const url = URL.createObjectURL(file);
   const a = new Audio();
   a.preload = 'auto';
+  wireSongLimit(a);
   a.onloadedmetadata = () => {
     if (token !== songLoadToken) { URL.revokeObjectURL(url); return; }
     songAudio = a;
-    SONG_CLIP = { url, name, duration: a.duration, file: file.name };
-    const len = isFinite(a.duration) ? ` · ${fmtTime(a.duration)}` : '';
-    setSongUI('ready', name, `Full song${len} · plays from the countdown to the end`);
+    SONG_CLIP = { url, name, duration: a.duration, file: hostedSongName(file.name), blob: file };
+    const secs = isFinite(a.duration) ? Math.min(Math.round(a.duration), SONG_MAX_SECONDS) : SONG_MAX_SECONDS;
+    setSongUI('ready', name, `First ${secs} seconds play from the countdown`);
   };
   a.onerror = () => {
     if (token !== songLoadToken) return;
@@ -1774,6 +1860,7 @@ function removeSong() {
 // Always starts the song from the very beginning (called when the countdown starts).
 function startSong() {
   if (!songAudio) return;
+  songAudio._cut = false;
   try { songAudio.currentTime = 0; } catch (e) {}
   songAudio.volume = 1;
   const p = songAudio.play();
@@ -1783,7 +1870,7 @@ function startSong() {
 
 // Continues from where it was (used after the video's own sound steps aside).
 function resumeSong() {
-  if (!songAudio || songAudio.ended || songPlaying()) return;
+  if (!songAudio || songFinished() || songPlaying()) return;
   const p = songAudio.play();
   if (p && p.catch) p.catch(() => {});
 }
@@ -1876,7 +1963,7 @@ function handleVideoFile(file) {
     settled = true;
     clearTimeout(timer);
     if (token !== videoLoadToken) { try { URL.revokeObjectURL(url); } catch (e) {} return; }
-    VIDEO_CLIP = { url, name, file: file.name };
+    VIDEO_CLIP = { url, name, file: hostedVideoName(file.name), blob: file };
     const dur = isFinite(probe.duration) ? fmtTime(probe.duration) + ' · ' : '';
     setVideoUI('ready', name, dur + fmtBytes(file.size));
   };
@@ -1929,7 +2016,7 @@ function goToVideo() {
   if (v.getAttribute('src') !== VIDEO_CLIP.url) v.src = VIDEO_CLIP.url;
   showScreen('screen4c');                 // the song just keeps playing
   v.currentTime = 0;
-  v.muted = !!(SONG_CLIP && songAudio && !songAudio.ended);                  // song + video together: the song is the sound, video plays silently
+  v.muted = !!(SONG_CLIP && songAudio && !songFinished());                  // song + video together: the song is the sound, video plays silently
   updateVideoSoundBtn();
   const p = v.play();
   if (p && p.catch) p.catch(() => { /* autoplay blocked: the player controls are right there */ });
@@ -2030,14 +2117,22 @@ function applySharedData(data) {
   if (data.g) GREETING_TEXT = data.g;
   if (Array.isArray(data.m) && data.m.length) messages = data.m;
   reasons = Array.isArray(data.r) ? data.r : [];
-  USER_REASON_IMAGES = (data.p && typeof data.p === 'object') ? data.p : {};
+  USER_REASON_IMAGES = {};
+  if (data.p && typeof data.p === 'object') {
+    for (const k of Object.keys(data.p)) {
+      const v = data.p[k];
+      if (typeof v !== 'string') continue;
+      if (/^data:image\//.test(v)) USER_REASON_IMAGES[k] = v;                       // photo travels inside the link
+      else if (v.length < 200 && !/[\\/]/.test(v)) { try { USER_REASON_IMAGES[k] = hostedUrl(v); } catch (e) {} }   // photo file on the website
+    }
+  }
   // Song / video: they can't travel inside a link, so the link carries the FILE NAME and the file
   // is loaded from the same website folder (upload it next to this HTML).
   const okName = n => typeof n === 'string' && n.length > 0 && n.length < 200 && !/[\\/]/.test(n);
   try {
     if (okName(data.a)) {
       const url = hostedUrl(data.a);
-      const a = new Audio(); a.preload = 'auto'; a.src = url;
+      const a = new Audio(); a.preload = 'auto'; wireSongLimit(a); a.src = url;
       songAudio = a;
       SONG_CLIP = { url, name: data.a, file: data.a, hosted: true };
     }

@@ -759,32 +759,12 @@
       <h1>Make it yours 💌</h1>
       <p class="setup-hint">Fill this in once — the surprise will use your own words.</p>
 
-      <div class="song-box" id="song-box">
-        <label class="field-label">🎵 Favorite Song</label>
-        <input type="file" id="song-file" accept="audio/*,.mp3,.m4a,.aac,.wav,.ogg,.oga,.opus,.flac,.weba,.mp4" hidden>
-        <div class="song-empty" id="song-empty">
-          <button type="button" class="song-add" onclick="document.getElementById('song-file').click()">＋ Add favorite song</button>
-          <div class="field-hint">The first 30 seconds of the song play automatically from the start of the countdown (with a soft fade-out). To make it play in the shared link, any song format works. After you create the link, one tap uploads it to your website for you.</div>
-        </div>
-        <div class="song-status" id="song-status" hidden>
-          <div class="song-icon" id="song-icon">🎵</div>
-          <div class="song-info">
-            <b id="song-name"></b>
-            <span id="song-detail"></span>
-          </div>
-          <div class="song-actions" id="song-actions" hidden>
-            <button type="button" id="song-preview-btn" onclick="toggleSongPreview()">▶ Preview</button>
-            <button type="button" class="remove" onclick="removeSong()">Remove</button>
-          </div>
-        </div>
-      </div>
-
       <div class="song-box" id="video-box">
         <label class="field-label">🎬 Video Clip</label>
         <input type="file" id="video-file" accept="video/*,.mp4,.m4v,.mov,.webm,.mkv,.avi,.3gp,.ogv" hidden>
         <div class="song-empty" id="video-empty">
           <button type="button" class="song-add" onclick="document.getElementById('video-file').click()">＋ Add video clip</button>
-          <div class="field-hint">Plays right after the photos &amp; notes, with your song. MP4 works everywhere; MOV, WebM, M4V work if your browser supports them. Any video format your browser can play works. After you create the link, one tap uploads it for you.</div>
+          <div class="field-hint">Plays right after the photos &amp; notes. MP4 works everywhere.</div>
         </div>
         <div class="song-status" id="video-status" hidden>
           <div class="song-icon" id="video-icon">🎬</div>
@@ -1510,112 +1490,84 @@ async function createShareLink() {
   status.textContent = 'Making your link... 💌';
   try {
     const data = collectShareData();
-    const sid = makeShareId();
     hostedMedia = [];
-    if (SONG_CLIP && SONG_CLIP.blob) {
-      status.textContent = 'Preparing your song… 🎵';
-      const s = await makeSongClip(SONG_CLIP.blob, sid);
-      hostedMedia.push(s); data.a = s.name;
-    }
     if (VIDEO_CLIP && VIDEO_CLIP.blob) {
-      const vn = sid + '-video.' + fileExt(VIDEO_CLIP.blob.name, 'mp4');
+      const vn = hostedVideoName(VIDEO_CLIP.blob.name);
       hostedMedia.push({ kind: 'video', name: vn, blob: VIDEO_CLIP.blob }); data.v = vn;
     }
-    if (SHARE_DB_URL.trim()) {
-      // Optional short-link mode (Firebase)
-      const body = JSON.stringify(JSON.stringify(data));
-      if (body.length > 7500000) throw new Error('too many photos, remove a few');
-      const id = makeShareId();
-      const res = await fetch(shareDbBase() + '/surprises/' + id + '.json', { method: 'PUT', body });
-      if (!res.ok) throw new Error('server said ' + res.status);
-      lastShareUrl = shareBase() + '?s=' + id;
-      lastQrUrl = lastShareUrl;
-    } else {
-      // No database needed: everything travels inside the link itself (after the #).
-      let enc = '';
-      const slim = Object.assign({}, data);
-      delete slim.m; delete slim.os; delete slim.fst;     // the receiver already has these built-in texts
-      if (!Object.keys(slim.p || {}).length) delete slim.p;
-      for (const [max, q] of [[360, 0.5], [280, 0.42], [200, 0.35]]) {
-        const small = {};
-        for (const k of Object.keys(data.p || {})) small[k] = await shrinkPhoto(data.p[k], max, q);
-        enc = await packData(Object.assign({}, slim, Object.keys(small).length ? { p: small } : {}));
-        if (enc.length < 30000) break;
-      }
-      if (enc.length > 60000) throw new Error('too many photos, remove a few');
-      lastShareUrl = shareBase() + '#d=' + enc;
-
-      // Short link for the QR code: the photos are NOT inside it, only their file names (photo-1.jpg ...).
-      const names = {};
-      for (const k of Object.keys(data.p || {})) {
-        const name = sid + '-photo-' + (Number(k) + 1) + '.jpg';
-        names[k] = name;
-        hostedMedia.push({ kind: 'photo', name, dataUrl: data.p[k] });
-      }
-      const compact = Object.assign({}, slim);
-      delete compact.p;
-      if (Object.keys(names).length) compact.p = names;
-      lastQrUrl = shareBase() + '#d=' + await packData(compact);
+    const slim = Object.assign({}, data);
+    delete slim.m; delete slim.os; delete slim.fst;
+    if (!Object.keys(slim.p || {}).length) delete slim.p;
+    let enc = '';
+    for (const [max, q] of [[340, 0.55], [300, 0.5], [260, 0.45], [220, 0.4], [190, 0.35], [160, 0.3]]) {
+      const small = {};
+      for (const k of Object.keys(data.p || {})) small[k] = await shrinkPhoto(data.p[k], max, q);
+      enc = await packData(Object.assign({}, slim, Object.keys(small).length ? { p: small } : {}));
+      if (enc.length < 24000) break;
     }
+    if (enc.length > 45000) throw new Error('too many photos, remove a few');
+    lastShareUrl = shareBase() + '#d=' + enc;
+    lastQrUrl = lastShareUrl;
     document.getElementById('share-link').value = lastShareUrl;
     fillLinkPreview();
     document.getElementById('share-qr').hidden = true;
     document.getElementById('qr-toggle').textContent = '▦ Show QR code';
-    status.textContent = lastShareUrl.length > 6000 ? 'Your surprise is ready! 🎉 The link is long (because of the photos). Tap 💬 WhatsApp and pick WhatsApp from the list, or tap 📋 Copy link and paste it in the chat.' : 'Your surprise is ready! 🎉 Send this link:';
+    status.textContent = 'Your surprise is ready! 🎉 Tap 💬 WhatsApp to send it, or 📋 Copy link.';
     done.hidden = false;
-    buildMediaPanel();
+    showVideoNote();
   } catch (e) {
     status.classList.add('error');
-    status.textContent = "Couldn't upload (" + e.message + "). Check your internet and try again.";
+    status.textContent = "Couldn't make the link (" + e.message + ").";
   } finally {
     btn.disabled = false;
   }
 }
 
 function copyShareLink(doneMsg) {
-  const input = document.getElementById('share-link');
   const st = document.getElementById('share-status');
-  const ok = () => { st.classList.remove('error'); st.textContent = (typeof doneMsg === 'string' && doneMsg) || 'Link copied ✅'; };
+  const ok = () => { st.classList.remove('error'); st.textContent = (typeof doneMsg === 'string' && doneMsg) || 'Link copied ✅ Now paste it in WhatsApp'; };
   const legacy = () => {
     try {
-      input.focus(); input.select(); input.setSelectionRange(0, input.value.length);
+      const ta = document.createElement('textarea');
+      ta.value = lastShareUrl; ta.setAttribute('readonly', ''); ta.style.cssText = 'position:fixed;top:0;left:0;opacity:0';
+      document.body.appendChild(ta); ta.focus(); ta.select(); ta.setSelectionRange(0, ta.value.length);
       const done = document.execCommand('copy');
-      input.blur();
+      ta.remove();
       if (done) { ok(); return; }
     } catch (e) {}
-    st.textContent = 'Could not copy automatically. Tap and hold the link box, choose Select all, then Copy 👆';
+    const input = document.getElementById('share-link'); input.focus(); input.select();
+    st.textContent = 'Could not copy automatically. The link is selected: tap Copy 👆';
   };
-  if (navigator.clipboard && navigator.clipboard.writeText && window.isSecureContext) {
-    navigator.clipboard.writeText(lastShareUrl).then(ok, legacy);
-  } else {
-    legacy();
-  }
+  if (navigator.clipboard && navigator.clipboard.writeText && window.isSecureContext) navigator.clipboard.writeText(lastShareUrl).then(ok, legacy);
+  else legacy();
 }
 
 function shareLinkOnWhatsApp() {
+  if (!lastShareUrl) return;
   const name = document.getElementById('input-name').value.trim() || RECIPIENT_NAME;
-  // Link goes on its own last line so WhatsApp shows the preview card under the message.
-  const intro = `I made a little surprise for you, ${name} 💕\nOpen it here 👇`;
-  const message = `${intro}\n${lastShareUrl}`;
-  if (lastShareUrl.length <= 6000) {
-    window.open('https://wa.me/?text=' + encodeURIComponent(message), '_blank');
+  const message = `I made a little surprise for you, ${name} 💕\nOpen it here 👇\n${lastShareUrl}`;
+  const enc = encodeURIComponent(message);
+  if (/Android|iPhone|iPad|iPod/i.test(navigator.userAgent)) {
+    // Opens the WhatsApp app directly with the message ready; falls back to the share sheet / copy.
+    let left = false;
+    document.addEventListener('visibilitychange', () => { left = true; }, { once: true });
+    location.href = 'whatsapp://send?text=' + enc;
+    setTimeout(() => {
+      if (left) return;
+      if (navigator.share) navigator.share({ text: message }).catch(() => copyShareLink());
+      else copyShareLink('Link copied ✅ Open WhatsApp and paste it');
+    }, 1800);
     return;
   }
-  // Very long link (photos): too big for a wa.me address.
-  const fallback = () => {
-    copyShareLink('Link copied ✅ Now open WhatsApp, choose the chat and paste it 👇');
-    window.open('https://wa.me/?text=' + encodeURIComponent(intro + '\n'), '_blank');
-  };
-  if (navigator.share && /Android|iPhone|iPad|iPod/i.test(navigator.userAgent)) {
-    // Phone share sheet: carries the whole link, just pick WhatsApp from the list.
-    navigator.share({ text: message }).catch(e => { if (!e || e.name !== 'AbortError') fallback(); });
-  } else {
-    fallback();
-  }
+  if (message.length <= 6000) window.open('https://wa.me/?text=' + enc, '_blank');
+  else { copyShareLink('Link copied ✅ Choose the chat in WhatsApp Web and paste (Ctrl+V) 👇'); window.open('https://web.whatsapp.com/', '_blank'); }
 }
 
 function openShareLink() {
-  if (lastShareUrl) window.open(lastShareUrl, '_blank');
+  if (!lastShareUrl) return;
+  const a = document.createElement('a');
+  a.href = lastShareUrl; a.target = '_blank'; a.rel = 'noopener';
+  document.body.appendChild(a); a.click(); a.remove();
 }
 
 // Shows the same title / text / picture that WhatsApp will show (read from the og: tags in <head>).
@@ -1637,9 +1589,7 @@ function toggleQR() {
   try {
     QR.draw(canvas, lastQrUrl || lastShareUrl);
     canvas.hidden = false; actions.hidden = false; hint.hidden = false; msg.hidden = true;
-    hint.textContent = hostedMedia.some(m => m.kind === 'photo')
-      ? 'Scan with a phone camera. The photos, song and video must be uploaded first (use the 🚀 Upload button above).'
-      : 'Scan with a phone camera to open the surprise';
+    hint.textContent = 'Scan with a phone camera to open the surprise';
   } catch (e) {
     canvas.hidden = true; actions.hidden = true; hint.hidden = true;
     msg.hidden = false;
@@ -1684,345 +1634,32 @@ async function shareQRImage() {
   saveQRImage();   // this device can't share files directly: save the image instead
 }
 
-// ---------- HOSTED FILES: song clip, video and photos (for the short link / QR code) ----------
-// Any file type the browser can open works: the song is converted to a 30-second WAV clip, photos to JPG,
-// the video is uploaded as it is. Files get unique names automatically, nobody has to rename anything.
-function wavFromPcm(pcm, sampleRate) {
-  const header = new DataView(new ArrayBuffer(44));
-  const w = (o, s) => { for (let i = 0; i < s.length; i++) header.setUint8(o + i, s.charCodeAt(i)); };
-  w(0, 'RIFF'); header.setUint32(4, 36 + pcm.byteLength, true); w(8, 'WAVE'); w(12, 'fmt ');
-  header.setUint32(16, 16, true); header.setUint16(20, 1, true); header.setUint16(22, 1, true);
-  header.setUint32(24, sampleRate, true); header.setUint32(28, sampleRate * 2, true);
-  header.setUint16(32, 2, true); header.setUint16(34, 16, true);
-  w(36, 'data'); header.setUint32(40, pcm.byteLength, true);
-  return new Blob([header, pcm], { type: 'audio/wav' });
-}
-
-async function makeSongClip(file, sid) {
-  try {
-    const AC = window.AudioContext || window.webkitAudioContext;
-    const ctx = new AC();
-    const ab = await file.arrayBuffer();
-    const buf = await new Promise((res, rej) => { const p = ctx.decodeAudioData(ab, res, rej); if (p && p.catch) p.catch(rej); });
-    try { ctx.close(); } catch (e) {}
-    const sr = buf.sampleRate, ch = buf.numberOfChannels;
-    const n = Math.min(buf.length, Math.floor(SONG_MAX_SECONDS * sr));
-    const mono = new Float32Array(n);
-    for (let c = 0; c < ch; c++) { const d = buf.getChannelData(c); for (let i = 0; i < n; i++) mono[i] += d[i] / ch; }
-    const outSr = Math.min(sr, 32000);
-    const outN = Math.floor(n * outSr / sr);
-    const pcm = new Int16Array(outN);
-    const fadeN = Math.min(outN, Math.floor(SONG_FADE_SECONDS * outSr));
-    for (let i = 0; i < outN; i++) {
-      const pos = i * sr / outSr, i0 = Math.floor(pos), i1 = Math.min(n - 1, i0 + 1), fr = pos - i0;
-      let s = mono[i0] * (1 - fr) + mono[i1] * fr;
-      if (i >= outN - fadeN) s *= (outN - i) / fadeN;
-      s = Math.max(-1, Math.min(1, s));
-      pcm[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
-    }
-    return { kind: 'song', name: sid + '-song.wav', blob: wavFromPcm(pcm, outSr) };
-  } catch (e) {
-    // this browser couldn't decode it: upload the original file (the player still stops it at 30 seconds)
-    return { kind: 'song', name: sid + '-song.' + fileExt(file.name, 'mp3'), blob: file };
-  }
-}
-
-async function mediaBlob(m) {
-  if (m.blob) return m.blob;
-  m.blob = await (await fetch(m.dataUrl)).blob();
-  return m.blob;
-}
-
-function githubTarget() {
-  const m = /^([^.]+)\.github\.io$/i.exec(location.hostname);
-  if (!m) return null;
-  const parts = location.pathname.split('/').filter(Boolean);
-  const dirs = location.pathname.endsWith('/') ? parts : parts.slice(0, -1);
-  if (!dirs.length) return { repo: m[1] + '/' + m[1] + '.github.io', dir: '' };
-  return { repo: m[1] + '/' + dirs[0], dir: dirs.slice(1).join('/') };
-}
-
-const toB64 = blob => new Promise((res, rej) => {
-  const r = new FileReader();
-  r.onload = () => res(String(r.result).split(',')[1]);
-  r.onerror = () => rej(new Error('could not read file'));
-  r.readAsDataURL(blob);
-});
-
-async function downloadHostedFiles() {
-  const line = document.getElementById('dl-status');
-  try {
-    for (const m of hostedMedia) {
-      const a = document.createElement('a');
-      a.href = URL.createObjectURL(await mediaBlob(m));
-      a.download = m.name;
-      document.body.appendChild(a); a.click(); a.remove();
-      setTimeout(() => URL.revokeObjectURL(a.href), 10000);
-      await new Promise(r => setTimeout(r, 600));
-    }
-    if (line) line.textContent = '⬇️ Downloaded ' + hostedMedia.length + ' file(s). Upload them to GitHub in the same folder as this HTML.';
-  } catch (e) {
-    if (line) line.textContent = "Couldn't download the files. Try again.";
-  }
-}
-
-function buildMediaPanel() {
-  const box = document.getElementById('share-media-note');
-  box.textContent = '';
-  if (!hostedMedia.length) { box.hidden = true; return; }
-  box.hidden = false;
-  const mk = (tag, text, css) => { const e = document.createElement(tag); if (text) e.textContent = text; if (css) e.style.cssText = css; box.appendChild(e); return e; };
-
-  mk('div', 'Your song, video and photos must be online so the link and the QR code can play them. Any file format is fine, the names are made automatically.');
-  const gh = githubTarget();
-  if (gh) {
-    const st = {}; try { st.t = localStorage.getItem('gh_token') || ''; } catch (e) { st.t = ''; }
-    mk('div', 'GitHub repository', 'margin-top:8px;font-size:0.75rem;opacity:.9');
-    const repo = mk('input', '', 'width:100%;margin-top:3px'); repo.type = 'text'; repo.id = 'gh-repo'; repo.value = gh.repo;
-    mk('div', 'GitHub token (one-time, stays only in this browser)', 'margin-top:8px;font-size:0.75rem;opacity:.9');
-    const tok = mk('input', '', 'width:100%;margin-top:3px'); tok.type = 'password'; tok.id = 'gh-token'; tok.value = st.t; tok.placeholder = 'github_pat_...'; tok.autocomplete = 'off';
-    const help = mk('div', '', 'margin-top:4px;font-size:0.72rem;opacity:.85');
-    help.append('Create it here: ');
-    const link = document.createElement('a');
-    link.href = 'https://github.com/settings/personal-access-tokens/new'; link.target = '_blank'; link.rel = 'noopener';
-    link.textContent = 'github.com/settings/personal-access-tokens/new'; link.style.color = '#ffe9a8';
-    help.appendChild(link);
-    help.append(' → Repository access: only select your site repo → Permissions → Contents: Read and write → Generate, then paste it above.');
-    const up = mk('button', '🚀 Upload everything to GitHub for me', 'width:100%;margin-top:8px'); up.type = 'button'; up.className = 'btn-alt'; up.onclick = uploadToGitHub;
-    mk('div', '', 'margin-top:6px;font-size:0.8rem').id = 'mn-progress';
-    const dl = mk('button', '⬇️ Or download the files and upload them yourself', 'width:100%;margin-top:8px;opacity:.85'); dl.type = 'button'; dl.className = 'btn-alt'; dl.onclick = downloadHostedFiles;
-  } else {
-    const dl = mk('button', '⬇️ Download the files', 'width:100%;margin-top:8px'); dl.type = 'button'; dl.className = 'btn-alt'; dl.onclick = downloadHostedFiles;
-    mk('div', 'Upload them to your website, in the same folder as this HTML.', 'margin-top:4px;font-size:0.75rem');
-  }
-  mk('div', '', 'margin-top:6px;font-size:0.8rem').id = 'dl-status';
-  mk('div', '', 'margin-top:8px').id = 'mn-list';
-  checkHostedMedia();
-}
-
-const KIND_LABEL = { song: '🎵 Song', video: '🎬 Video', photo: '📷 Photo' };
-
-// Refreshes the ✅ / ⚠️ list. Returns true when every file is online.
-async function checkHostedMedia() {
-  const list = document.getElementById('mn-list');
-  if (!list) return false;
-  list.textContent = '';
-  const lines = hostedMedia.map(m => {
-    const d = document.createElement('div'); d.className = 'mn-line';
-    d.textContent = (KIND_LABEL[m.kind] || '📄') + ' … checking'; list.appendChild(d); return d;
-  });
-  let allOk = true;
-  await Promise.all(hostedMedia.map(async (m, i) => {
-    let found = false;
-    try { found = (await fetch(hostedUrl(m.name), { method: 'HEAD', cache: 'no-store' })).ok; } catch (e) {}
-    if (!found) allOk = false;
-    lines[i].textContent = (KIND_LABEL[m.kind] || '📄') + (found ? ' ✅ online' : ' ⚠️ not online yet');
-  }));
-  if (!allOk) {
-    const again = document.createElement('button');
-    again.type = 'button'; again.className = 'btn-alt'; again.textContent = '🔄 Check again'; again.style.marginTop = '6px';
-    again.onclick = checkHostedMedia;
-    list.appendChild(again);
-  }
-  return allOk;
-}
-
-async function ghPut(repo, path, b64, token) {
-  const url = 'https://api.github.com/repos/' + repo + '/contents/' + path.split('/').map(encodeURIComponent).join('/');
-  const headers = { 'Authorization': 'Bearer ' + token, 'Accept': 'application/vnd.github+json', 'Content-Type': 'application/json' };
-  for (let attempt = 0; attempt < 3; attempt++) {
-    const r = await fetch(url, { method: 'PUT', headers, body: JSON.stringify({ message: 'Add surprise media', content: b64 }) });
-    if (r.ok) return;
-    if (r.status === 409 && attempt < 2) { await new Promise(x => setTimeout(x, 1200)); continue; }
-    if (r.status === 401) throw new Error('GitHub did not accept the token. Make a new one and paste it again.');
-    if (r.status === 403 || r.status === 404) throw new Error("The token can't write to this repository. Check the repository name and that the token has Contents: Read and write.");
-    if (r.status === 422) throw new Error('GitHub refused the file (it may already exist).');
-    throw new Error('GitHub said ' + r.status);
-  }
-  throw new Error('GitHub is busy, try again in a minute.');
-}
-
-async function uploadToGitHub() {
-  const prog = document.getElementById('mn-progress');
-  const token = document.getElementById('gh-token').value.trim();
-  const repo = document.getElementById('gh-repo').value.trim();
-  const gh = githubTarget() || { dir: '' };
-  prog.style.color = '';
-  if (!/^[\w.-]+\/[\w.-]+$/.test(repo)) { prog.textContent = 'Type the repository like  username/repository-name'; return; }
-  if (!token) { prog.textContent = 'Paste your GitHub token first (steps are just above).'; return; }
-  try { localStorage.setItem('gh_token', token); } catch (e) {}
-  try {
-    for (let i = 0; i < hostedMedia.length; i++) {
-      const m = hostedMedia[i];
-      prog.textContent = '⏫ Uploading ' + (i + 1) + ' of ' + hostedMedia.length + ' (' + (KIND_LABEL[m.kind] || 'file') + ')…';
-      const blob = await mediaBlob(m);
-      if (blob.size > 70 * 1024 * 1024) throw new Error('A file is bigger than 70 MB. Please use a shorter video.');
-      await ghPut(repo, (gh.dir ? gh.dir + '/' : '') + m.name, await toB64(blob), token);
-    }
-  } catch (e) {
-    prog.textContent = '⚠️ ' + e.message;
-    return;
-  }
-  // GitHub Pages needs a moment to publish the new files: keep checking
-  for (let t = 0; t < 24; t++) {
-    prog.textContent = '✅ Uploaded! Waiting for GitHub to publish… (' + (t + 1) + ')';
-    if (await checkHostedMedia()) {
-      // everything is online: the short link is now the best one to send (small, QR-friendly)
-      lastShareUrl = lastQrUrl;
-      document.getElementById('share-link').value = lastShareUrl;
-      fillLinkPreview();
-      document.getElementById('share-status').textContent = 'Your surprise is ready! 🎉 Everything is online. Send this link or the QR code:';
-      prog.textContent = '🎉 Done! Song, video and photos are online. The link and QR code work now.';
-      return;
-    }
-    await new Promise(x => setTimeout(x, 6000));
-  }
-  prog.textContent = 'Uploaded, but GitHub is still publishing. Wait a minute and tap Check again below.';
-}
-
-// ---------- FAVORITE SONG (starts with the countdown, plays the first SONG_MAX_SECONDS seconds) ----------
-let SONG_CLIP = null;          // { url, name, duration }
-let songAudio = null;
-let songLoadToken = 0;
-
-const fmtTime = t => `${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, '0')}`;
-
-// The song plays only this many seconds (then fades out). Change this number if you ever want it longer.
-const SONG_MAX_SECONDS = 30;
-const SONG_FADE_SECONDS = 2;
-
-// Simple file names for the website (no spaces / brackets, so nothing can go wrong on GitHub).
+// ---------- VIDEO FILE (a video can't travel inside a link, so it is a file next to this page) ----------
 const fileExt = (n, dflt) => { const m = /\.([A-Za-z0-9]{1,5})$/.exec(n || ''); return m ? m[1].toLowerCase() : dflt; };
-const hostedSongName = n => 'song.' + fileExt(n, 'mp3');
 const hostedVideoName = n => 'video.' + fileExt(n, 'mp4');
+const fmtTime = t => `${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, '0')}`;
+// (music was removed) these stay as harmless no-ops so the screens keep working
+let SONG_CLIP = null, songAudio = null;
+function startSong() {} function stopSong() {} function resumeSong() {} function songFinished() { return true; }
 
-function songFinished() { return !!(songAudio && (songAudio.ended || songAudio._cut)); }
-
-// Stops the song after SONG_MAX_SECONDS with a short fade-out.
-function wireSongLimit(a) {
-  a.addEventListener('timeupdate', () => {
-    if (a._cut) return;
-    const left = SONG_MAX_SECONDS - a.currentTime;
-    if (left <= 0) {
-      a._cut = true;
-      a.pause();
-      a.volume = 1;
-      // if the video screen was waiting on the song for its sound, give the video its own sound now
-      try {
-        const v = document.getElementById('memory-video');
-        if (v && document.getElementById('screen4c').classList.contains('active') && v.muted) { v.muted = false; updateVideoSoundBtn(); }
-      } catch (e) {}
-    } else if (left < SONG_FADE_SECONDS) {
-      a.volume = Math.max(0, left / SONG_FADE_SECONDS);
-    }
-  });
-}
-
-function setSongUI(state, name, detail) {
-  const box = document.getElementById('song-box');
-  const empty = document.getElementById('song-empty');
-  const status = document.getElementById('song-status');
-  const actions = document.getElementById('song-actions');
-  box.classList.toggle('loading', state === 'loading');
-  box.classList.toggle('error', state === 'error');
-  empty.hidden = state === 'ready' || state === 'loading';
-  status.hidden = state === 'empty' || state === 'error';
-  actions.hidden = state !== 'ready';
-  if (state === 'empty' || state === 'error') empty.hidden = false;
-  document.getElementById('song-name').textContent = name || '';
-  document.getElementById('song-detail').textContent = detail || '';
-  if (state === 'error') {
-    status.hidden = false;
-    document.getElementById('song-icon').textContent = '⚠️';
-  } else {
-    document.getElementById('song-icon').textContent = '🎵';
-  }
-}
-
-function songPlaying() { return !!(songAudio && !songAudio.paused && !songAudio.ended); }
-
-function clearSong() {
-  if (songAudio) { try { songAudio.pause(); } catch (e) {} }
-  if (SONG_CLIP) { try { URL.revokeObjectURL(SONG_CLIP.url); } catch (e) {} }
-  SONG_CLIP = null;
-  songAudio = null;
-}
-
-function handleSongFile(file) {
-  if (!file) return;
-  const token = ++songLoadToken;
-  const name = file.name.replace(/\.[^.]+$/, '');
-  clearSong();
-  setSongUI('loading', name, 'Loading your song…');
-  const url = URL.createObjectURL(file);
-  const a = new Audio();
-  a.preload = 'auto';
-  wireSongLimit(a);
-  a.onloadedmetadata = () => {
-    if (token !== songLoadToken) { URL.revokeObjectURL(url); return; }
-    songAudio = a;
-    SONG_CLIP = { url, name, duration: a.duration, file: hostedSongName(file.name), blob: file };
-    const secs = isFinite(a.duration) ? Math.min(Math.round(a.duration), SONG_MAX_SECONDS) : SONG_MAX_SECONDS;
-    setSongUI('ready', name, `First ${secs} seconds play from the countdown`);
+function showVideoNote() {
+  const n = document.getElementById('share-media-note');
+  if (!n) return;
+  n.innerHTML = '';
+  if (!(VIDEO_CLIP && VIDEO_CLIP.blob)) { n.hidden = true; return; }
+  const name = hostedVideoName(VIDEO_CLIP.blob.name);
+  const t = document.createElement('div');
+  t.textContent = '🎬 For the video to play in the link: download it below and upload it ONCE to your GitHub site folder (same place as this page). Keep the name ' + name + '.';
+  const b = document.createElement('button');
+  b.type = 'button'; b.className = 'btn-alt'; b.style.cssText = 'width:100%;margin-top:8px';
+  b.textContent = '⬇️ Download ' + name;
+  b.onclick = () => {
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(VIDEO_CLIP.blob); a.download = name;
+    document.body.appendChild(a); a.click(); a.remove();
   };
-  a.onerror = () => {
-    if (token !== songLoadToken) return;
-    try { URL.revokeObjectURL(url); } catch (e) {}
-    SONG_CLIP = null; songAudio = null;
-    setSongUI('error', name, "Couldn't read that file. Try an MP3, M4A or WAV.");
-  };
-  a.addEventListener('play', updateSongPreviewBtn);
-  a.addEventListener('pause', updateSongPreviewBtn);
-  a.addEventListener('ended', updateSongPreviewBtn);
-  a.src = url;
+  n.appendChild(t); n.appendChild(b); n.hidden = false;
 }
-
-function removeSong() {
-  songLoadToken++;
-  clearSong();
-  const input = document.getElementById('song-file');
-  if (input) input.value = '';
-  setSongUI('empty');
-  updateSongPreviewBtn();
-}
-
-// Always starts the song from the very beginning (called when the countdown starts).
-function startSong() {
-  if (!songAudio) return;
-  songAudio._cut = false;
-  try { songAudio.currentTime = 0; } catch (e) {}
-  songAudio.volume = 1;
-  const p = songAudio.play();
-  if (p && p.catch) p.catch(() => { /* autoplay blocked by the browser */ });
-  updateSongPreviewBtn();
-}
-
-// Continues from where it was (used after the video's own sound steps aside).
-function resumeSong() {
-  if (!songAudio || songFinished() || songPlaying()) return;
-  const p = songAudio.play();
-  if (p && p.catch) p.catch(() => {});
-}
-
-function stopSong() {
-  if (!songAudio) return;
-  songAudio.pause();
-  updateSongPreviewBtn();
-}
-
-function toggleSongPreview() {
-  if (songPlaying()) stopSong(); else startSong();
-}
-
-function updateSongPreviewBtn() {
-  const btn = document.getElementById('song-preview-btn');
-  if (btn) btn.textContent = songPlaying() ? '■ Stop' : '▶ Preview';
-}
-
-(function initSongPicker() {
-  const input = document.getElementById('song-file');
-  if (input) input.addEventListener('change', () => handleSongFile(input.files[0]));
-})();
 
 // ---------- VIDEO CLIP (plays after the photos + notes, together with the song) ----------
 let VIDEO_CLIP = null;          // { url, name }
@@ -2259,12 +1896,6 @@ function applySharedData(data) {
   // is loaded from the same website folder (upload it next to this HTML).
   const okName = n => typeof n === 'string' && n.length > 0 && n.length < 200 && !/[\\/]/.test(n);
   try {
-    if (okName(data.a)) {
-      const url = hostedUrl(data.a);
-      const a = new Audio(); a.preload = 'auto'; wireSongLimit(a); a.src = url;
-      songAudio = a;
-      SONG_CLIP = { url, name: data.a, file: data.a, hosted: true };
-    }
     if (okName(data.v)) VIDEO_CLIP = { url: hostedUrl(data.v), name: data.v, file: data.v, hosted: true };
   } catch (e) { /* ignore a bad file name */ }
 }
@@ -2302,7 +1933,7 @@ async function loadSharedSurprise(id, inline) {
       applySharedData(JSON.parse(raw));
     }
     box.hidden = true;
-    if (SONG_CLIP || VIDEO_CLIP) showTapGate(); else startSurpriseView();
+    startSurpriseView();
   } catch (e) {
     box.classList.add('error');
     msg.textContent = inline
@@ -2749,8 +2380,17 @@ function nextReason() {
 }
 
 function afterReasons() {
-  if (VIDEO_CLIP) goToVideo();
-  else goToScreen5();
+  if (!VIDEO_CLIP) { goToScreen5(); return; }
+  if (!VIDEO_CLIP.hosted) { goToVideo(); return; }
+  // shared link: check the video file exists on the website, otherwise skip it quietly
+  const p = document.createElement('video');
+  p.preload = 'metadata'; p.muted = true;
+  let done = false;
+  const go = ok => { if (done) return; done = true; clearTimeout(t); if (ok) goToVideo(); else { VIDEO_CLIP = null; goToScreen5(); } };
+  const t = setTimeout(() => go(false), 8000);
+  p.onloadedmetadata = () => go(!!p.videoWidth);
+  p.onerror = () => go(false);
+  p.src = VIDEO_CLIP.url;
 }
 
 function goToReasons() {

@@ -7,15 +7,18 @@
 <title>Happy Birthday Love</title>
 
 <!-- ===== LINK PREVIEW (WhatsApp / Telegram / Instagram) =====
-     Replace YOUR-SITE.com below with your real website address (the same place you upload this HTML).
+     Replace YOUR-SITE.com (only in the 2 image lines below) with your real website address (the same place you upload this HTML).
+     (og:url removed on purpose: a wrong og:url makes WhatsApp show the wrong link/preview.)
      Upload preview.jpg next to this HTML file. WhatsApp needs the FULL https:// address for the image. -->
+<meta property="og:site_name" content="Birthday Surprise">
 <meta property="og:type" content="website">
 <meta property="og:title" content="🎂 A Birthday Surprise is waiting for you 💖">
 <meta property="og:description" content="Someone made something special just for you. Tap to open it ✨">
 <meta property="og:image" content="https://YOUR-SITE.com/preview.jpg">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
-<meta property="og:url" content="https://YOUR-SITE.com/">
+<meta property="og:image:type" content="image/jpeg">
+<meta property="og:image:alt" content="A Birthday Surprise is waiting for you">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="🎂 A Birthday Surprise is waiting for you 💖">
 <meta name="twitter:description" content="Someone made something special just for you. Tap to open it ✨">
@@ -1052,7 +1055,7 @@
 
 <script>
 // ============================================================================
-//  SHARE SETUP (one time, free, ~3 minutes)  -  needed so photos can travel in a SHORT link
+//  OPTIONAL: SHORT LINK SETUP (free, ~3 minutes). NOT needed - without it, the surprise travels inside the link itself.
 //  1. Go to https://console.firebase.google.com  ->  Add project (any name; Analytics off).
 //  2. Build -> Realtime Database -> Create database -> start in LOCKED mode.
 //  3. Open the "Rules" tab, paste this, press Publish:
@@ -1397,6 +1400,50 @@ function makeShareId() {
   return Array.from(rnd, n => chars[n % chars.length]).join('');
 }
 
+// ---------- LINK WITHOUT A DATABASE: pack / unpack the surprise inside the URL ----------
+function b64u(bytes) {
+  let s = '';
+  for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+  return btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+function unb64u(str) {
+  str = str.replace(/-/g, '+').replace(/_/g, '/');
+  while (str.length % 4) str += '=';
+  const bin = atob(str);
+  const out = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+  return out;
+}
+async function pipeBytes(bytes, stream) {
+  const r = new Blob([bytes]).stream().pipeThrough(stream);
+  return new Uint8Array(await new Response(r).arrayBuffer());
+}
+async function packData(obj) {
+  const raw = new TextEncoder().encode(JSON.stringify(obj));
+  if (typeof CompressionStream === 'function') return 'z' + b64u(await pipeBytes(raw, new CompressionStream('deflate-raw')));
+  return 'r' + b64u(raw);
+}
+async function unpackData(str) {
+  const bytes = unb64u(str.slice(1));
+  if (str[0] === 'z') return JSON.parse(new TextDecoder().decode(await pipeBytes(bytes, new DecompressionStream('deflate-raw'))));
+  return JSON.parse(new TextDecoder().decode(bytes));
+}
+function shrinkPhoto(dataUrl, max, q) {
+  return new Promise(res => {
+    const im = new Image();
+    im.onload = () => {
+      const sc = Math.min(1, max / Math.max(im.width, im.height));
+      const c = document.createElement('canvas');
+      c.width = Math.round(im.width * sc);
+      c.height = Math.round(im.height * sc);
+      c.getContext('2d').drawImage(im, 0, 0, c.width, c.height);
+      res(c.toDataURL('image/jpeg', q));
+    };
+    im.onerror = () => res(dataUrl);
+    im.src = dataUrl;
+  });
+}
+
 let lastShareUrl = '';
 
 async function createShareLink() {
@@ -1416,27 +1463,35 @@ async function createShareLink() {
     status.textContent = 'Open this page from your website (the https:// address) to create a link. A file opened from your computer cannot be shared.';
     return;
   }
-  if (!SHARE_DB_URL.trim()) {
-    status.classList.add('error');
-    status.textContent = 'One-time setup needed: open this HTML file, find SHARE_DB_URL near the top, and paste your free Firebase database URL there (the steps are written right above it).';
-    return;
-  }
-
   btn.disabled = true;
-  status.textContent = 'Uploading your surprise... 💌';
+  status.textContent = 'Making your link... 💌';
   try {
     const data = collectShareData();
-    const body = JSON.stringify(JSON.stringify(data));
-    if (body.length > 7500000) throw new Error('too many photos, remove a few');
-    const id = makeShareId();
-    const res = await fetch(shareDbBase() + '/surprises/' + id + '.json', { method: 'PUT', body });
-    if (!res.ok) throw new Error('server said ' + res.status);
-    lastShareUrl = shareBase() + '?s=' + id;
+    if (SHARE_DB_URL.trim()) {
+      // Optional short-link mode (Firebase)
+      const body = JSON.stringify(JSON.stringify(data));
+      if (body.length > 7500000) throw new Error('too many photos, remove a few');
+      const id = makeShareId();
+      const res = await fetch(shareDbBase() + '/surprises/' + id + '.json', { method: 'PUT', body });
+      if (!res.ok) throw new Error('server said ' + res.status);
+      lastShareUrl = shareBase() + '?s=' + id;
+    } else {
+      // No database needed: everything travels inside the link itself (after the #).
+      let enc = '';
+      for (const [max, q] of [[360, 0.5], [280, 0.42], [200, 0.35]]) {
+        const small = {};
+        for (const k of Object.keys(data.p || {})) small[k] = await shrinkPhoto(data.p[k], max, q);
+        enc = await packData(Object.assign({}, data, { p: small }));
+        if (enc.length < 30000) break;
+      }
+      if (enc.length > 60000) throw new Error('too many photos, remove a few');
+      lastShareUrl = shareBase() + '#d=' + enc;
+    }
     document.getElementById('share-link').value = lastShareUrl;
     fillLinkPreview();
     document.getElementById('share-qr').hidden = true;
     document.getElementById('qr-toggle').textContent = '▦ Show QR code';
-    status.textContent = 'Your surprise is ready! 🎉 Send this link:';
+    status.textContent = lastShareUrl.length > 6000 ? 'Your surprise is ready! 🎉 The link is long (because of the photos), so tap 📋 Copy link and paste it in WhatsApp.' : 'Your surprise is ready! 🎉 Send this link:';
     done.hidden = false;
   } catch (e) {
     status.classList.add('error');
@@ -1459,6 +1514,14 @@ function copyShareLink() {
 function shareLinkOnWhatsApp() {
   const name = document.getElementById('input-name').value.trim() || RECIPIENT_NAME;
   // Link goes on its own last line so WhatsApp shows the preview card under the message.
+  if (lastShareUrl.length > 6000) {
+    // Very long link: too big for a wa.me address, so copy it and let them paste it in the chat.
+    copyShareLink();
+    const st = document.getElementById('share-status');
+    st.textContent = 'Link copied ✅ Now open WhatsApp, choose the chat and paste it 👇';
+    window.open('https://wa.me/?text=' + encodeURIComponent(`I made a little surprise for you, ${name} 💕\nOpen it here 👇\n`), '_blank');
+    return;
+  }
   const message = `I made a little surprise for you, ${name} 💕\nOpen it here 👇\n${lastShareUrl}`;
   window.open('https://wa.me/?text=' + encodeURIComponent(message), '_blank');
 }
@@ -1824,7 +1887,7 @@ function applySharedData(data) {
   USER_REASON_IMAGES = (data.p && typeof data.p === 'object') ? data.p : {};
 }
 
-async function loadSharedSurprise(id) {
+async function loadSharedSurprise(id, inline) {
   const s0 = document.getElementById('screen0');
   if (s0) s0.classList.remove('active');
   const box = document.getElementById('share-loading');
@@ -1832,12 +1895,16 @@ async function loadSharedSurprise(id) {
   box.classList.remove('error');
   box.hidden = false;
   try {
-    if (!SHARE_DB_URL.trim()) throw new Error('sharing is not set up');
-    const res = await fetch(shareDbBase() + '/surprises/' + encodeURIComponent(id) + '.json');
-    if (!res.ok) throw new Error('server said ' + res.status);
-    const raw = await res.json();
-    if (!raw) throw new Error('not found');
-    applySharedData(JSON.parse(raw));
+    if (inline) {
+      applySharedData(await unpackData(id));
+    } else {
+      if (!SHARE_DB_URL.trim()) throw new Error('sharing is not set up');
+      const res = await fetch(shareDbBase() + '/surprises/' + encodeURIComponent(id) + '.json');
+      if (!res.ok) throw new Error('server said ' + res.status);
+      const raw = await res.json();
+      if (!raw) throw new Error('not found');
+      applySharedData(JSON.parse(raw));
+    }
     box.hidden = true;
     startSurpriseView();
   } catch (e) {
@@ -2041,7 +2108,9 @@ function startSurpriseView() {
   tickClock();
 }
 const SHARE_ID = new URLSearchParams(location.search).get('s');
+const SHARE_HASH = /^#d=/.test(location.hash) ? location.hash.slice(3) : '';
 if (SHARE_ID) loadSharedSurprise(SHARE_ID);
+else if (SHARE_HASH) loadSharedSurprise(SHARE_HASH, true);
 else if (!document.getElementById('screen0')) startSurpriseView();
 
 function reasonTitleFor(reason, i) {
